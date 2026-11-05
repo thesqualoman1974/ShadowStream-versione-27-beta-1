@@ -1,0 +1,11 @@
+global using System.Collections.Concurrent;
+global using System.Buffers.Binary;
+global using System.Diagnostics;
+global using System.Globalization;
+global using System.IO.Pipes;
+global using System.Runtime.InteropServices;
+global using System.Text;
+global using System.Threading.Channels;
+global using NAudio.CoreAudioApi;
+global using NAudio.Dmo;
+global using NAudio.Wave;

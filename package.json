@@ -1,0 +1,60 @@
+{
+  "name": "shadowstream",
+  "version": "27.0.0-beta.1",
+  "private": true,
+  "description": "ShadowStream - replay buffer circolare (Electron + OBS Studio + helper .NET 8)",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "start:debug": "electron . --devtools",
+    "backend:build": "dotnet build",
+    "backend:run": "dotnet run --project . -- --headless --no-autostart --meter-only",
+    "backend:publish": "dotnet publish ShadowStream.csproj -c Release -r win-x64 --self-contained true -o publish/backend",
+    "build:win": "npm run backend:publish && electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "it.shadowstream.app",
+    "productName": "ShadowStream",
+    "asar": true,
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "publish/backend",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "electron/assets/icon.ico",
+      "artifactName": "ShadowStream-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "thesqualoman1974",
+        "repo": "ShadowStream-versione-27-beta-1"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  }
+}

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https://coresg-normal.trae.ai; media-src 'self' blob:;"
+    />
+    <title>ShadowStream</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- Top Bar -->
+      <header class="top-bar">
+        <div class="top-left">
+          <img src="../assets/logo.png" class="app-logo-img" alt="Logo" />
+          <span class="app-name">SHADOWSTREAM</span>
+          <nav class="top-nav">
+            <span class="nav-item">INSTANT REPLAY</span>
+            <span class="nav-item badge">NVENC</span>
+            <span class="nav-item badge secondary" id="version-badge">27 beta 1</span>
+            <button id="btn-check-updates" class="nav-item update-button" type="button">Aggiorna</button>
+          </nav>
+        </div>
+        <div class="top-right">
+          <div class="status-indicator">
+            <span class="dot"></span>
+            <span id="status-text">Replay off</span>
+          </div>
+          <div class="window-controls">
+            <button id="btn-minimize" class="win-btn" title="Minimizza">—</button>
+            <button id="btn-maximize" class="win-btn" title="Ingrandisci">▢</button>
+            <button id="btn-close" class="win-btn close" title="Chiudi">✕</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="main-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+          <button class="side-btn active" id="nav-dashboard" type="button" aria-label="Dashboard" title="Dashboard" aria-current="page">▶</button>
+          <button class="side-btn" id="nav-clips" type="button" aria-label="Apri cartella clip" title="Clip">📁</button>
+          <button class="side-btn" id="nav-settings" type="button" aria-label="Impostazioni" title="Impostazioni">⚙</button>
+        </aside>
+
+        <!-- Content Area -->
+        <main class="content">
+          <div class="preview-area">
+            <div class="preview-box">
+              <video id="preview-video" aria-label="Anteprima cattura schermo" autoplay muted playsinline hidden></video>
+              <span id="preview-placeholder">Avvio anteprima schermo...</span>
+              <div class="preview-zoom" role="group" aria-label="Controlli zoom anteprima">
+                <button id="btn-zoom-out" type="button" aria-label="Riduci zoom" title="Riduci zoom">−</button>
+                <input id="zoom-slider" type="range" min="1" max="4" step="0.1" value="1" aria-label="Zoom inquadratura" />
+                <span id="zoom-value" aria-live="polite">1.0×</span>
+                <button id="btn-zoom-in" type="button" aria-label="Aumenta zoom" title="Aumenta zoom">+</button>
+                <button id="btn-zoom-reset" type="button">Reimposta</button>
+                <span class="zoom-hint">Trascina per spostare</span>
+              </div>
+            </div>
+          </div>
+          <div class="main-actions">
+            <button id="btn-toggle-replay" class="btn-main replay start">
+              <span class="btn-icon">🔄</span>
+              <span class="btn-text">Avvia Instant Replay</span>
+            </button>
+            <button id="btn-toggle-record" class="btn-main record start">
+              <span class="btn-icon">🔴</span>
+              <span class="btn-text">Avvia Registrazione MP4</span>
+            </button>
+            <button id="btn-save-clip" class="btn-main save" disabled>
+              <span class="btn-icon">💾</span>
+              <span class="btn-text">Salva clip</span>
+            </button>
+          </div>
+          <div class="content-left">
+            <section class="hero-section">
+              <span class="section-tag">NVIDIA-STYLE INSTANT REPLAY</span>
+              <h2 class="section-title">Ultimi <span id="display-buffer-min">5</span> minuti, sempre pronti</h2>
+
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <span class="stat-label">CATTURA</span>
+                  <span class="stat-value">60 FPS</span>
+                </div>
+                <div class="stat-card">
+                  <span class="stat-label">ENCODER</span>
+                  <span class="stat-value">NVENC</span>
+                </div>
+                <div class="stat-card">
+                  <span class="stat-label">HOTKEY</span>
+                  <span class="stat-value">F9</span>
+                </div>
+                <div class="stat-card">
+                  <span class="stat-label">FORMATO</span>
+                  <span class="stat-value">MP4</span>
+                </div>
+              </div>
+
+              <div class="buffer-control-row">
+                <div class="circular-progress-container">
+                  <svg class="progress-ring" width="84" height="84" viewBox="0 0 100 100">
+                    <circle class="progress-ring__circle-bg" stroke="#1a1f26" stroke-width="6" fill="transparent" r="40" cx="50" cy="50"/>
+                    <circle id="progress-ring-circle" class="progress-ring__circle" stroke="#4ade80" stroke-width="6" fill="transparent" r="40" cx="50" cy="50"/>
+                  </svg>
+                  <div class="progress-text">
+                    <span class="p-label">BUFFER</span>
+                    <span class="p-value"><span id="buffer-current-s">0</span>s</span>
+                    <span class="p-total">di <span id="buffer-total-min">5</span> min</span>
+                  </div>
+                </div>
+              </div>
+
+              <p class="hotkey-hint">In game premi <span class="key">F9</span> — overlay NVIDIA, senza lasciare la partita.</p>
+            </section>
+          </div>
+
+          <aside class="content-right">
+            <div class="panel">
+              <div class="panel-header">
+                <h3>MIXER</h3>
+              </div>
+              <div class="mixer-group">
+                <div class="mixer-label-row">
+                  <label>Audio del PC (loopback)</label>
+                  <span id="audio-output-status" class="meter-status" aria-live="polite">INATTIVO</span>
+                </div>
+                <div class="audio-row">
+                  <div
+                    id="audio-output-meter"
+                    class="level-meter"
+                    role="meter"
+                    aria-label="Livello audio del PC"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="0"
+                    aria-valuetext="Nessun segnale"
+                    title="Livello del loopback audio di Windows"
+                  >
+                    <span class="meter-segment"></span><span class="meter-segment"></span>
+                    <span class="meter-segment"></span><span class="meter-segment"></span>
+                    <span class="meter-segment"></span><span class="meter-segment"></span>
+                    <span class="meter-segment"></span><span class="meter-segment"></span>
+                    <span class="meter-segment"></span><span class="meter-segment"></span>
+                    <span class="meter-segment"></span><span class="meter-segment"></span>
+                  </div>
+                  <span id="audio-output-name" class="mixer-device">Uscita predefinita</span>
+                </div>
+              </div>
+              <div class="mixer-group">
+                <div class="mixer-label-row">
+                  <label>Microfono</label>
+                  <span id="audio-mic-status" class="meter-status" aria-live="polite">INATTIVO</span>
+                </div>
+                <div class="audio-row">
+                  <div
+                    id="audio-mic-meter"
+                    class="level-meter"
+                    role="meter"
+                    aria-label="Livello microfono"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="0"
+                    aria-valuetext="Nessun segnale"
+                    title="Livello audio in ingresso dal microfono"
+                  >
+                    <span class="meter-segment"></span><span class="meter-segment"></span>
+                    <span class="meter-segment"></span><span class="meter-segment"></span>
+                    <span class="meter-segment"></span><span class="meter-segment"></span>
+                    <span class="meter-segment"></span><span class="meter-segment"></span>
+                    <span class="meter-segment"></span><span class="meter-segment"></span>
+                    <span class="meter-segment"></span><span class="meter-segment"></span>
+                  </div>
+                  <span id="audio-mic-name" class="mixer-device">Microfono predefinito</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h3>OUTPUT</h3>
+                <button class="link-btn">Apri</button>
+              </div>
+              <div class="form-group">
+                <label>Cartella clip</label>
+                <div class="input-row">
+                  <input type="text" id="input-output-path" value="D:\ShadowStream\Clips" readonly />
+                  <button id="btn-browse" class="btn-secondary">Sfoglia</button>
+                </div>
+              </div>
+              <div id="lastclip" class="last-clip">
+                <span>Ultima clip</span>
+                <span id="lastclip-path">Nessuna clip salvata</span>
+              </div>
+            </div>
+          </aside>
+
+          <section id="settings-view" class="settings-view" aria-labelledby="settings-title">
+            <header class="settings-header">
+              <span class="section-tag">SHADOWSTREAM</span>
+              <h1 id="settings-title" class="section-title">Impostazioni</h1>
+              <p>Configura il replay, la sorgente video e l'audio. Le modifiche vengono salvate automaticamente.</p>
+            </header>
+
+            <div class="settings-grid">
+              <section class="panel settings-card">
+                <div class="panel-header">
+                  <h2>INSTANT REPLAY</h2>
+                </div>
+                <div class="buffer-slider-container">
+                  <div class="slider-header">
+                    <label for="buffer-slider">Durata clip e buffer</label>
+                    <strong id="slider-val">5 min</strong>
+                  </div>
+                  <input type="range" id="buffer-slider" min="5" max="30" step="5" value="5" />
+                  <div class="slider-labels">
+                    <span>5 min</span>
+                    <span>30 min</span>
+                  </div>
+                  <p class="settings-help">Con Instant Replay attivo, Salva clip salva il buffer disponibile fino alla durata selezionata.</p>
+                </div>
+              </section>
+
+              <section class="panel settings-card">
+                <div class="panel-header">
+                  <h2>SORGENTE VIDEO</h2>
+                </div>
+                <div class="capture-toggles">
+                  <button id="btn-mode-screen" class="toggle-btn active" type="button">Cattura schermo</button>
+                  <button id="btn-mode-game" class="toggle-btn" type="button">Cattura gioco</button>
+                </div>
+                <div class="form-group" id="game-window-group" hidden>
+                  <label for="select-game-window">Finestra del gioco</label>
+                  <div class="select-wrapper">
+                    <select id="select-game-window">
+                      <option value="">Seleziona una finestra...</option>
+                    </select>
+                    <button id="btn-refresh-windows" class="mini-btn" type="button">Aggiorna</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="panel settings-card">
+                <div class="panel-header">
+                  <h2>AUDIO</h2>
+                  <button id="btn-refresh-audio" class="link-btn" type="button">Aggiorna dispositivi</button>
+                </div>
+                <div class="form-group">
+                  <label for="select-audio-output">Audio del PC (loopback)</label>
+                  <select id="select-audio-output">
+                    <option value="default">Uscita predefinita (automatico)</option>
+                    <option value="disabled">Disattivato</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="select-audio-mic">Microfono</label>
+                  <select id="select-audio-mic">
+                    <option value="default">Microfono predefinito (automatico)</option>
+                    <option value="disabled">Disattivato</option>
+                  </select>
+                </div>
+                <p class="settings-help">I meter del segnale restano visibili nel dashboard.</p>
+              </section>
+            </div>
+          </section>
+        </main>
+      </div>
+
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>
