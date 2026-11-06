@@ -10,7 +10,7 @@
     "backend:build": "dotnet build",
     "backend:run": "dotnet run --project . -- --headless --no-autostart --meter-only",
     "backend:publish": "dotnet publish ShadowStream.csproj -c Release -r win-x64 --self-contained true -o publish/backend",
-    "build:win": "npm run backend:publish && electron-builder --win nsis"
+    "build:win": "npm run backend:publish && electron-builder --win nsis --x64"
   },
   "build": {
     "appId": "it.shadowstream.app",
@@ -52,7 +52,7 @@
   },
   "devDependencies": {
     "electron": "^45.2.1",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.18.0"
   },
   "dependencies": {
     "electron-updater": "^6.6.2"
