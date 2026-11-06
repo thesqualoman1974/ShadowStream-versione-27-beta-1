@@ -13,6 +13,9 @@ const COLLECTION_NAME = 'ShadowStream';
 const SCENE_NAME = 'ShadowStream';
 const DESKTOP_AUDIO_NAME = 'Audio del desktop';
 const MICROPHONE_NAME = 'Microfono/disp. ausiliario';
+const WEBCAM_NAME = 'Webcam ShadowStream';
+const WEBCAM_BORDER_NAME = 'Webcam Border ShadowStream';
+const WEBCAM_CHROMA_FILTER = 'ShadowStream chroma key';
 const AUDIO_SAMPLE_RATE_HZ = 48000;
 const AUDIO_BITRATE_KBPS = 192;
 const AUDIO_TRACK_COUNT = 6;
@@ -39,6 +42,7 @@ class ObsEngine extends EventEmitter {
     this.wsPort = null;
     this.replayRunning = false;
     this.recording = false;
+    this.streaming = false;
     this.wasReplayRunning = false;
     this.windowTitle = '';
     this.readyOnce = false;
@@ -139,6 +143,13 @@ class ObsEngine extends EventEmitter {
     this.stopRequested = true;
     const proc = this.process;
     if (!proc || proc.exitCode !== null) return;
+    if (this.streaming) {
+      try {
+        await this.stopStream();
+      } catch (error) {
+        this.log('error', `Arresto diretta OBS non riuscito: ${error.message}`);
+      }
+    }
     try {
       const replay = await this.request('GetReplayBufferStatus');
       if (replay.outputActive) {
@@ -285,6 +296,234 @@ class ObsEngine extends EventEmitter {
     this.recording = true;
     this.emit('status');
     return true;
+  }
+
+  async startStream({ server, key }) {
+    if (typeof server !== 'string' || typeof key !== 'string' || !server || !key) {
+      throw new TypeError('Configurazione del relay OBS non valida.');
+    }
+    const status = await this.request('GetStreamStatus');
+    if (status.outputActive) throw new Error('OBS sta già trasmettendo.');
+    await this.request('SetStreamServiceSettings', {
+      streamServiceType: 'rtmp_custom',
+      streamServiceSettings: { server, key, use_auth: false },
+      save: false,
+    });
+    await this.request('StartStream');
+    await this.waitForOutputState('GetStreamStatus', true, 'diretta');
+    this.streaming = true;
+    this.emit('status');
+    return true;
+  }
+
+  async stopStream() {
+    const status = await this.request('GetStreamStatus');
+    if (!status.outputActive) {
+      this.streaming = false;
+      this.emit('status');
+      return true;
+    }
+    await this.request('StopStream');
+    await this.waitForOutputState('GetStreamStatus', false, 'diretta');
+    this.streaming = false;
+    this.emit('status');
+    return true;
+  }
+
+  async getWebcamDevices() {
+    await this.ensureWebcamInput();
+    const { propertyItems } = await this.request('GetInputPropertiesListPropertyItems', {
+      inputName: WEBCAM_NAME,
+      propertyName: 'video_device_id',
+    });
+    if (!Array.isArray(propertyItems)) {
+      throw new Error('OBS non ha restituito l’elenco delle webcam.');
+    }
+    return propertyItems
+      .filter((item) => item?.itemEnabled !== false
+        && typeof item?.itemValue === 'string'
+        && typeof item?.itemName === 'string')
+      .map((item) => ({ id: item.itemValue, name: item.itemName }));
+  }
+
+  async setWebcamSettings(settings) {
+    if (!settings || typeof settings !== 'object'
+      || typeof settings.enabled !== 'boolean'
+      || typeof settings.chromaKeyEnabled !== 'boolean'
+      || typeof settings.borderEnabled !== 'boolean'
+      || typeof settings.borderColor !== 'string'
+      || !/^#[0-9a-fA-F]{6}$/.test(settings.borderColor)
+      || (settings.deviceId !== null && typeof settings.deviceId !== 'string')
+      || !Number.isInteger(settings.x) || settings.x < 0 || settings.x > 3440
+      || !Number.isInteger(settings.y) || settings.y < 0 || settings.y > 1440
+      || !Number.isInteger(settings.width) || settings.width < 160 || settings.width > 1720
+      || !Number.isInteger(settings.height) || settings.height < 90 || settings.height > 960
+      || settings.x + settings.width > 3440 || settings.y + settings.height > 1440) {
+      throw new TypeError('Impostazioni webcam non valide.');
+    }
+
+    const sceneItem = await this.ensureWebcamInput();
+    if (settings.enabled) {
+      if (!settings.deviceId) throw new Error('Seleziona una webcam prima di abilitarla.');
+      const devices = await this.getWebcamDevices();
+      if (!devices.some((device) => device.id === settings.deviceId)) {
+        throw new Error('La webcam selezionata non è più disponibile.');
+      }
+      await this.request('SetInputSettings', {
+        inputName: WEBCAM_NAME,
+        inputSettings: { video_device_id: settings.deviceId },
+        overlay: true,
+      });
+    }
+
+    await this.request('SetSceneItemEnabled', {
+      sceneName: SCENE_NAME,
+      sceneItemId: sceneItem.sceneItemId,
+      sceneItemEnabled: settings.enabled,
+    });
+    const { sceneItemTransform: current } = await this.request('GetSceneItemTransform', {
+      sceneName: SCENE_NAME,
+      sceneItemId: sceneItem.sceneItemId,
+    });
+    await this.request('SetSceneItemTransform', {
+      sceneName: SCENE_NAME,
+      sceneItemId: sceneItem.sceneItemId,
+      sceneItemTransform: {
+        positionX: settings.x,
+        positionY: settings.y,
+        rotation: 0,
+        scaleX: current.scaleX || 1,
+        scaleY: current.scaleY || 1,
+        alignment: current.alignment || 0,
+        boundsType: 'OBS_BOUNDS_SCALE_INNER',
+        boundsAlignment: 0,
+        boundsWidth: settings.width,
+        boundsHeight: settings.height,
+        cropToBounds: false,
+        cropLeft: 0,
+        cropRight: 0,
+        cropTop: 0,
+        cropBottom: 0,
+      },
+    });
+
+    await this.setWebcamBorder(settings, sceneItem);
+
+    const { filters } = await this.request('GetSourceFilterList', { sourceName: WEBCAM_NAME });
+    const chromaFilter = filters?.find((filter) => filter.filterName === WEBCAM_CHROMA_FILTER);
+    if (settings.chromaKeyEnabled && !chromaFilter) {
+      await this.request('CreateSourceFilter', {
+        sourceName: WEBCAM_NAME,
+        filterName: WEBCAM_CHROMA_FILTER,
+        filterKind: 'chroma_key_filter',
+        filterSettings: {
+          key_color_type: 'green',
+          similarity: 400,
+          smoothness: 80,
+          spill: 100,
+        },
+      });
+    } else if (chromaFilter) {
+      await this.request('SetSourceFilterEnabled', {
+        sourceName: WEBCAM_NAME,
+        filterName: WEBCAM_CHROMA_FILTER,
+        filterEnabled: settings.chromaKeyEnabled,
+      });
+    }
+    this.log('system', settings.enabled
+      ? `Webcam aggiornata (${settings.width}×${settings.height}, posizione ${settings.x},${settings.y}).`
+      : 'Webcam disattivata.');
+    return true;
+  }
+
+  async setWebcamBorder(settings, webcamSceneItem) {
+    const { inputs } = await this.request('GetInputList');
+    const borderExists = inputs.some((input) => input.inputName === WEBCAM_BORDER_NAME);
+    if (settings.borderEnabled && !borderExists) {
+      const rgb = Number.parseInt(settings.borderColor.slice(1), 16);
+      await this.request('CreateInput', {
+        sceneName: SCENE_NAME,
+        inputName: WEBCAM_BORDER_NAME,
+        inputKind: 'color_source_v3',
+        inputSettings: {
+          color: ((rgb << 8) | 0xff) >>> 0,
+          width: settings.width + 12,
+          height: settings.height + 12,
+        },
+        sceneItemEnabled: true,
+      });
+    }
+
+    const { sceneItems } = await this.request('GetSceneItemList', { sceneName: SCENE_NAME });
+    const border = sceneItems.find((item) => item.sourceName === WEBCAM_BORDER_NAME);
+    if (!border) return;
+    if (settings.borderEnabled) {
+      const rgb = Number.parseInt(settings.borderColor.slice(1), 16);
+      await this.request('SetInputSettings', {
+        inputName: WEBCAM_BORDER_NAME,
+        inputSettings: {
+          color: ((rgb << 8) | 0xff) >>> 0,
+          width: settings.width + 12,
+          height: settings.height + 12,
+        },
+        overlay: true,
+      });
+      await this.request('SetSceneItemTransform', {
+        sceneName: SCENE_NAME,
+        sceneItemId: border.sceneItemId,
+        sceneItemTransform: {
+          positionX: Math.max(0, settings.x - 6),
+          positionY: Math.max(0, settings.y - 6),
+          rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
+          alignment: 0,
+          boundsType: 'OBS_BOUNDS_STRETCH',
+          boundsAlignment: 0,
+          boundsWidth: settings.width + 12,
+          boundsHeight: settings.height + 12,
+          cropToBounds: false,
+          cropLeft: 0,
+          cropRight: 0,
+          cropTop: 0,
+          cropBottom: 0,
+        },
+      });
+      await this.request('SetSceneItemIndex', {
+        sceneName: SCENE_NAME,
+        sceneItemId: border.sceneItemId,
+        sceneItemIndex: webcamSceneItem.sceneItemIndex + 1,
+      });
+      await this.request('SetSceneItemEnabled', {
+        sceneName: SCENE_NAME,
+        sceneItemId: border.sceneItemId,
+        sceneItemEnabled: settings.enabled,
+      });
+    } else {
+      await this.request('SetSceneItemEnabled', {
+        sceneName: SCENE_NAME,
+        sceneItemId: border.sceneItemId,
+        sceneItemEnabled: false,
+      });
+    }
+  }
+
+  async ensureWebcamInput() {
+    const { inputs } = await this.request('GetInputList');
+    if (!Array.isArray(inputs)) throw new Error('OBS non ha restituito l’elenco delle sorgenti.');
+    if (!inputs.some((input) => input.inputName === WEBCAM_NAME)) {
+      await this.request('CreateInput', {
+        sceneName: SCENE_NAME,
+        inputName: WEBCAM_NAME,
+        inputKind: 'dshow_input',
+        inputSettings: {},
+        sceneItemEnabled: false,
+      });
+    }
+    const { sceneItems } = await this.request('GetSceneItemList', { sceneName: SCENE_NAME });
+    const webcam = sceneItems.find((item) => item.sourceName === WEBCAM_NAME);
+    if (!webcam) throw new Error('OBS non ha creato la sorgente webcam.');
+    return webcam;
   }
 
   async setBufferSeconds(seconds) {
@@ -952,6 +1191,7 @@ class ObsEngine extends EventEmitter {
     this.socket = null;
     this.replayRunning = false;
     this.recording = false;
+    this.streaming = false;
     this.rejectPendingRequests(new Error('Processo OBS terminato.'));
     this.emit('status');
     this.process = null;

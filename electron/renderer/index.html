@@ -19,7 +19,7 @@
           <nav class="top-nav">
             <span class="nav-item">INSTANT REPLAY</span>
             <span class="nav-item badge">NVENC</span>
-            <span class="nav-item badge secondary" id="version-badge">27 beta 1.5</span>
+            <span class="nav-item badge secondary" id="version-badge">27 beta 2.0</span>
             <button id="btn-check-updates" class="nav-item update-button" type="button">Aggiorna</button>
           </nav>
         </div>
@@ -50,6 +50,7 @@
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
           <button class="side-btn active" id="nav-dashboard" type="button" aria-label="Dashboard" title="Dashboard" aria-current="page">▶</button>
+          <button class="side-btn" id="nav-live" type="button" aria-label="Multi-streaming" title="Live">●</button>
           <button class="side-btn" id="nav-clips" type="button" aria-label="Apri cartella clip" title="Clip">📁</button>
           <button class="side-btn" id="nav-settings" type="button" aria-label="Impostazioni" title="Impostazioni">⚙</button>
         </aside>
@@ -291,6 +292,160 @@
                 <p class="settings-help">I meter del segnale restano visibili nel dashboard.</p>
               </section>
             </div>
+          </section>
+
+          <section id="live-view" class="live-view" aria-labelledby="live-title">
+            <header class="settings-header">
+              <span class="section-tag">SIMULCAST</span>
+              <h1 id="live-title" class="section-title">Multi-streaming</h1>
+              <p>Configura gli endpoint RTMP delle piattaforme e avvia una sola diretta. Le chiavi sono protette con la cifratura di Windows.</p>
+            </header>
+
+            <div class="live-toolbar panel">
+              <div class="live-status-row">
+                <strong id="live-state" role="status" aria-live="polite">Offline</strong>
+                <span>Bitrate sorgente OBS: <strong id="live-bitrate">—</strong></span>
+              </div>
+              <div class="live-actions">
+                <button id="btn-live-start" class="btn-primary" type="button">AVVIA TUTTE LE DIRETTE</button>
+                <button id="btn-live-stop" class="btn-secondary" type="button" disabled>Ferma dirette</button>
+              </div>
+              <p id="live-message" class="settings-help" role="status" aria-live="polite"></p>
+              <p class="settings-help">Se TikTok è selezionato, ShadowStream crea un’uscita verticale 9:16 con una seconda codifica NVENC; le altre destinazioni mantengono il flusso orizzontale originale.</p>
+            </div>
+
+            <section class="panel live-crop-card">
+              <div class="panel-header">
+                <h2>SMART CROP TIKTOK 9:16</h2>
+                <strong><output id="live-tiktok-crop-value">50%</output></strong>
+              </div>
+              <input id="live-tiktok-crop" type="range" min="0" max="100" step="1" value="50" aria-label="Posizione orizzontale del crop TikTok" />
+              <div class="slider-labels"><span>Sinistra</span><span>Centro</span><span>Destra</span></div>
+              <p class="settings-help">Sposta l’inquadratura verticale mantenendo il ritaglio 9:16 senza deformare l’immagine.</p>
+            </section>
+
+            <div class="live-platform-grid">
+              <section class="panel live-platform-card" data-live-platform="twitch">
+                <div class="live-platform-heading">
+                  <label><input id="live-twitch-enabled" type="checkbox" /> Twitch</label>
+                  <span id="live-twitch-status" class="meter-status">OFFLINE</span>
+                </div>
+                <div class="live-platform-rate">Bitrate stream <strong id="live-twitch-bitrate">—</strong></div>
+                <div class="form-group">
+                  <label for="live-twitch-server">Server RTMP(S)</label>
+                  <input id="live-twitch-server" type="text" value="rtmps://live.twitch.tv/app" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                  <label for="live-twitch-key">Chiave streaming</label>
+                  <input id="live-twitch-key" type="password" autocomplete="new-password" />
+                </div>
+              </section>
+
+              <section class="panel live-platform-card" data-live-platform="youtube">
+                <div class="live-platform-heading">
+                  <label><input id="live-youtube-enabled" type="checkbox" /> YouTube</label>
+                  <span id="live-youtube-status" class="meter-status">OFFLINE</span>
+                </div>
+                <div class="live-platform-rate">Bitrate stream <strong id="live-youtube-bitrate">—</strong></div>
+                <div class="form-group">
+                  <label for="live-youtube-server">Server RTMP(S)</label>
+                  <input id="live-youtube-server" type="text" value="rtmps://a.rtmps.youtube.com/live2" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                  <label for="live-youtube-key">Chiave streaming</label>
+                  <input id="live-youtube-key" type="password" autocomplete="new-password" />
+                </div>
+                <div class="form-group">
+                  <label for="youtube-client-id">Client ID OAuth Google (app desktop)</label>
+                  <input id="youtube-client-id" type="text" autocomplete="off" placeholder="...apps.googleusercontent.com" />
+                </div>
+                <div class="youtube-account-row">
+                  <button id="btn-youtube-connect" class="btn-secondary" type="button">Collega account YouTube</button>
+                  <span id="youtube-account-status" class="meter-status" role="status">NON COLLEGATO</span>
+                </div>
+                <div class="form-group">
+                  <label for="youtube-stream-select">Live stream già creato nel dashboard YouTube</label>
+                  <div class="select-wrapper">
+                    <select id="youtube-stream-select">
+                      <option value="">Collega l’account per caricare le live...</option>
+                    </select>
+                    <button id="btn-youtube-refresh-streams" class="mini-btn" type="button">Aggiorna</button>
+                  </div>
+                  <button id="btn-youtube-use-stream" class="mini-btn" type="button">Usa server e chiave selezionati</button>
+                </div>
+              </section>
+
+              <section class="panel live-platform-card" data-live-platform="tiktok">
+                <div class="live-platform-heading">
+                  <label><input id="live-tiktok-enabled" type="checkbox" /> TikTok 9:16</label>
+                  <span id="live-tiktok-status" class="meter-status">OFFLINE</span>
+                </div>
+                <div class="live-platform-rate">Bitrate stream <strong id="live-tiktok-bitrate">—</strong></div>
+                <div class="form-group">
+                  <label for="live-tiktok-server">Server RTMP(S) fornito da TikTok</label>
+                  <input id="live-tiktok-server" type="text" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                  <label for="live-tiktok-key">Chiave streaming</label>
+                  <input id="live-tiktok-key" type="password" autocomplete="new-password" />
+                </div>
+              </section>
+
+              <section class="panel live-platform-card" data-live-platform="kick">
+                <div class="live-platform-heading">
+                  <label><input id="live-kick-enabled" type="checkbox" /> Kick</label>
+                  <span id="live-kick-status" class="meter-status">OFFLINE</span>
+                </div>
+                <div class="live-platform-rate">Bitrate stream <strong id="live-kick-bitrate">—</strong></div>
+                <div class="form-group">
+                  <label for="live-kick-server">Server RTMP(S) del dashboard Kick</label>
+                  <input id="live-kick-server" type="text" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                  <label for="live-kick-key">Chiave streaming</label>
+                  <input id="live-kick-key" type="password" autocomplete="new-password" />
+                </div>
+              </section>
+            </div>
+
+            <section class="panel live-webcam-card">
+              <div class="panel-header">
+                <h2>WEBCAM E OVERLAY</h2>
+                <label class="live-webcam-toggle"><input id="live-webcam-enabled" type="checkbox" /> Abilita webcam</label>
+              </div>
+              <div class="form-group">
+                <label for="live-webcam-device">Dispositivo</label>
+                <div class="select-wrapper">
+                  <select id="live-webcam-device">
+                    <option value="">Aggiorna elenco dispositivi...</option>
+                  </select>
+                  <button id="btn-webcam-refresh" class="mini-btn" type="button">Aggiorna</button>
+                </div>
+              </div>
+              <div class="webcam-controls-grid">
+                <label for="live-webcam-x">Posizione X <output id="live-webcam-x-value">1480</output></label>
+                <input id="live-webcam-x" type="range" min="0" max="2960" step="20" value="1480" />
+                <label for="live-webcam-y">Posizione Y <output id="live-webcam-y-value">1100</output></label>
+                <input id="live-webcam-y" type="range" min="0" max="1170" step="10" value="1100" />
+                <label for="live-webcam-width">Larghezza <output id="live-webcam-width-value">480</output></label>
+                <input id="live-webcam-width" type="range" min="160" max="1720" step="20" value="480" />
+                <label for="live-webcam-height">Altezza <output id="live-webcam-height-value">270</output></label>
+                <input id="live-webcam-height" type="range" min="90" max="960" step="10" value="270" />
+              </div>
+              <label class="live-webcam-toggle"><input id="live-webcam-chroma" type="checkbox" /> Rimuovi sfondo verde (chromakey)</label>
+              <label class="live-webcam-toggle"><input id="live-webcam-border" type="checkbox" /> Mostra bordo <input id="live-webcam-border-color" type="color" value="#ffffff" aria-label="Colore bordo webcam" /></label>
+              <p class="settings-help">La webcam viene sovrapposta alla scena OBS. Per includerla nel crop TikTok, posizionala nell’area centrale 9:16.</p>
+              <button id="btn-webcam-apply" class="btn-primary" type="button">Applica overlay webcam</button>
+            </section>
+
+            <section class="panel live-ffmpeg-card">
+              <div class="panel-header">
+                <h2>RELAY LOCALE</h2>
+                <button id="btn-select-ffmpeg" class="link-btn" type="button">Seleziona ffmpeg.exe</button>
+              </div>
+              <p id="live-ffmpeg-path" class="settings-help">FFmpeg richiesto, non incluso nell’installer. Il relay copia il flusso codificato da OBS verso le destinazioni selezionate.</p>
+            </section>
+            <p class="settings-help live-oauth-note">YouTube supporta il collegamento desktop OAuth con PKCE e l’importazione di uno stream già creato. Twitch, TikTok e Kick restano configurabili con server e chiave RTMP manuali.</p>
           </section>
         </main>
       </div>

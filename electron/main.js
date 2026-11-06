@@ -9,6 +9,7 @@ const {
   desktopCapturer,
   screen,
   session,
+  safeStorage,
 } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -16,10 +17,18 @@ const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const ObsEngine = require('./obs-engine');
 const { applyGainToMeterLevel } = require('./audio-meter');
+const { RtmpRelay } = require('./streaming/rtmp-relay');
+const { createDestinationStore } = require('./streaming/destination-store');
+const { authorizeYoutube } = require('./streaming/youtube-oauth');
+const { getYoutubeStreamIngest, listYoutubeStreams } = require('./streaming/youtube-api');
 
 for (const output of [process.stdout, process.stderr]) {
   output.on('error', (error) => {
     if (error.code !== 'EPIPE') setImmediate(() => { throw error; });
+  });
+  ipcMain.handle('live:set-vertical-crop', (event, value) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
+    return getDestinationStore().saveVerticalCropX(value);
   });
 }
 
@@ -44,6 +53,12 @@ let captureReady = false;
 let captureModeQueue = Promise.resolve();
 let pendingReplayStart = false;
 let obsEngine = null;
+let destinationStore = null;
+let streamRelay = null;
+let streamStartPromise = null;
+let streamStopPromise = null;
+let liveDestinations = [];
+let youtubeOAuthPromise = null;
 let launchedConfiguration = null;
 let configuredBufferSeconds = 300;
 const DEFAULT_ZOOM_SETTINGS = { zoom: 1, centerX: 0.5, centerY: 0.5 };
@@ -70,6 +85,18 @@ let audioSettings = {
   systemVolume: DEFAULT_AUDIO_VOLUME,
   microphoneVolume: DEFAULT_AUDIO_VOLUME,
 };
+const DEFAULT_WEBCAM_SETTINGS = {
+  enabled: false,
+  deviceId: null,
+  x: 1480,
+  y: 1100,
+  width: 480,
+  height: 270,
+  chromaKeyEnabled: false,
+  borderEnabled: false,
+  borderColor: '#ffffff',
+};
+let webcamSettings = { ...DEFAULT_WEBCAM_SETTINGS };
 
 function isValidAudioVolume(value) {
   return Number.isFinite(value) && value >= 0 && value <= MAX_AUDIO_VOLUME;
@@ -89,6 +116,24 @@ function captureSettingsPath() {
 
 function zoomSettingsPath() {
   return path.join(app.getPath('userData'), 'zoom-settings.json');
+}
+
+function webcamSettingsPath() {
+  return path.join(app.getPath('userData'), 'webcam-settings.json');
+}
+
+function streamingSettingsPath() {
+  return path.join(app.getPath('userData'), 'streaming-settings.json');
+}
+
+function getDestinationStore() {
+  if (!destinationStore) {
+    destinationStore = createDestinationStore({
+      filePath: streamingSettingsPath(),
+      safeStorage,
+    });
+  }
+  return destinationStore;
 }
 
 function isValidZoomSettings(settings) {
@@ -122,6 +167,42 @@ function loadZoomSettings() {
 function saveZoomSettings() {
   fs.mkdirSync(path.dirname(zoomSettingsPath()), { recursive: true });
   fs.writeFileSync(zoomSettingsPath(), JSON.stringify(zoomSettings, null, 2), 'utf8');
+}
+
+function isValidWebcamSettings(settings) {
+  return settings && typeof settings === 'object'
+    && typeof settings.enabled === 'boolean'
+    && (settings.deviceId === null || (typeof settings.deviceId === 'string' && settings.deviceId.length <= 512))
+    && Number.isInteger(settings.x) && settings.x >= 0 && settings.x <= 3440
+    && Number.isInteger(settings.y) && settings.y >= 0 && settings.y <= 1440
+    && Number.isInteger(settings.width) && settings.width >= 160 && settings.width <= 1720
+    && Number.isInteger(settings.height) && settings.height >= 90 && settings.height <= 960
+    && settings.x + settings.width <= 3440
+    && settings.y + settings.height <= 1440
+    && typeof settings.chromaKeyEnabled === 'boolean'
+    && typeof settings.borderEnabled === 'boolean'
+    && typeof settings.borderColor === 'string'
+    && /^#[0-9a-fA-F]{6}$/.test(settings.borderColor);
+}
+
+function loadWebcamSettings() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(webcamSettingsPath(), 'utf8'));
+    if (isValidWebcamSettings(saved)) {
+      webcamSettings = { ...DEFAULT_WEBCAM_SETTINGS, ...saved };
+    } else {
+      log('error', 'Impostazioni webcam salvate non valide; uso i valori predefiniti.');
+    }
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      log('error', `Impossibile leggere le impostazioni webcam: ${error.message}`);
+    }
+  }
+}
+
+function saveWebcamSettings() {
+  fs.mkdirSync(path.dirname(webcamSettingsPath()), { recursive: true });
+  fs.writeFileSync(webcamSettingsPath(), JSON.stringify(webcamSettings, null, 2), 'utf8');
 }
 
 function isValidBufferSeconds(seconds) {
@@ -435,6 +516,13 @@ async function configureObsEngine() {
   try {
     const configuration = currentConfiguration();
     await obsEngine.applySettings(configuration);
+    if (webcamSettings.enabled) {
+      try {
+        await obsEngine.setWebcamSettings(webcamSettings);
+      } catch (error) {
+        log('error', `Ripristino webcam non riuscito: ${error.message}`);
+      }
+    }
     launchedConfiguration = configuration;
     captureRunning = obsEngine.replayRunning;
     recording = obsEngine.recording;
@@ -530,8 +618,241 @@ async function stopServices() {
   quitting = true;
   pendingReplayStart = false;
   pendingBackendCommands.length = 0;
-  if (obsEngine?.running) await obsEngine.stop();
+  try {
+    await stopLiveStream();
+  } catch (error) {
+    log('error', `Arresto della diretta non riuscito: ${error.message}`);
+  }
+  if (obsEngine?.running) {
+    try { await obsEngine.stop(); } catch (error) {
+      log('error', `Arresto OBS non riuscito: ${error.message}`);
+    }
+  }
   await stopBackend();
+}
+
+function sendLiveStatus(state, details = {}) {
+  send('live:status', { state, ...details });
+}
+
+function verifyFfmpeg(ffmpegPath) {
+  if (!fs.existsSync(ffmpegPath) || !fs.statSync(ffmpegPath).isFile()) {
+    throw new Error('FFmpeg non trovato nel percorso selezionato. Seleziona ffmpeg.exe nelle impostazioni Live.');
+  }
+  return new Promise((resolve, reject) => {
+    const process = spawn(ffmpegPath, ['-version'], {
+      windowsHide: true,
+      stdio: 'ignore',
+    });
+    const timeout = setTimeout(() => {
+      if (process.exitCode === null) process.kill();
+      reject(new Error('FFmpeg non ha risposto al controllo di versione.'));
+    }, 5000);
+    process.once('error', (error) => {
+      clearTimeout(timeout);
+      reject(new Error(`Impossibile avviare FFmpeg: ${error.message}`));
+    });
+    process.once('close', (code) => {
+      clearTimeout(timeout);
+      if (code === 0) resolve();
+      else reject(new Error(`Il file selezionato non è un FFmpeg avviabile (exit ${code}).`));
+    });
+  });
+}
+
+function verifyNvenc(ffmpegPath) {
+  return new Promise((resolve, reject) => {
+    const process = spawn(ffmpegPath, [
+      '-hide_banner',
+      '-loglevel', 'error',
+      '-f', 'lavfi',
+      '-i', 'color=c=black:s=320x240:d=0.1',
+      '-frames:v', '1',
+      '-c:v', 'h264_nvenc',
+      '-f', 'null',
+      '-',
+    ], {
+      windowsHide: true,
+      stdio: 'ignore',
+    });
+    const timeout = setTimeout(() => {
+      if (process.exitCode === null) process.kill();
+      reject(new Error('Verifica NVENC scaduta. Controlla GPU NVIDIA e driver aggiornati.'));
+    }, 10000);
+    process.once('error', (error) => {
+      clearTimeout(timeout);
+      reject(new Error(`Verifica NVENC non riuscita: ${error.message}`));
+    });
+    process.once('close', (code) => {
+      clearTimeout(timeout);
+      if (code === 0) resolve();
+      else reject(new Error('TikTok verticale richiede h264_nvenc funzionante. Controlla GPU NVIDIA, driver e build FFmpeg.'));
+    });
+  });
+}
+
+function connectYoutubeAccount(clientId) {
+  if (youtubeOAuthPromise) return youtubeOAuthPromise;
+  const store = getDestinationStore();
+  youtubeOAuthPromise = authorizeYoutube({ clientId, shell })
+    .then((credentials) => {
+      store.saveYoutubeCredentials({ clientId, ...credentials });
+      return { connected: true };
+    })
+    .finally(() => { youtubeOAuthPromise = null; });
+  return youtubeOAuthPromise;
+}
+
+async function getYoutubeAccessToken(forceRefresh = false) {
+  const store = getDestinationStore();
+  const credentials = store.getYoutubeCredentials();
+  const clientId = store.getYoutubeClientId();
+  if (!credentials || !clientId) throw new Error('Collega prima un account YouTube.');
+  if (!forceRefresh && credentials.expiresAt > Date.now() + 60000) {
+    return credentials.accessToken;
+  }
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      refresh_token: credentials.refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Aggiornamento token YouTube rifiutato (HTTP ${response.status}). Ricollega l’account.`);
+  }
+  const token = await response.json();
+  if (typeof token.access_token !== 'string' || !Number.isFinite(token.expires_in) || token.expires_in <= 0) {
+    throw new Error('YouTube non ha restituito un access token valido.');
+  }
+  const refreshed = {
+    accessToken: token.access_token,
+    refreshToken: credentials.refreshToken,
+    expiresAt: Date.now() + token.expires_in * 1000,
+  };
+  store.saveYoutubeCredentials({ clientId, ...refreshed });
+  return refreshed.accessToken;
+}
+
+async function youtubeApiFetch(url, options = {}) {
+  let token = await getYoutubeAccessToken();
+  let response = await fetch(url, {
+    ...options,
+    headers: { ...options.headers, Authorization: `Bearer ${token}` },
+  });
+  if (response.status === 401) {
+    token = await getYoutubeAccessToken(true);
+    response = await fetch(url, {
+      ...options,
+      headers: { ...options.headers, Authorization: `Bearer ${token}` },
+    });
+  }
+  return response;
+}
+
+async function waitForObsReady() {
+  if (!obsEngine?.running && !obsEngine?.connecting) startObsEngine();
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    if (quitting) throw new Error('ShadowStream si sta chiudendo.');
+    if (captureReady && obsEngine?.running) return;
+    if (!obsEngine?.running && !obsEngine?.connecting) {
+      throw new Error('Il motore OBS non è riuscito ad avviarsi.');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error('Timeout attendendo che il motore OBS sia pronto.');
+}
+
+async function startLiveStream() {
+  if (quitting) throw new Error('ShadowStream si sta chiudendo.');
+  if (streamRelay) throw new Error('Una diretta ShadowStream è già in corso.');
+  const store = getDestinationStore();
+  const ffmpegPath = store.getFfmpegPath();
+  if (!ffmpegPath) throw new Error('Seleziona ffmpeg.exe nelle impostazioni Live prima di avviare.');
+  await verifyFfmpeg(ffmpegPath);
+  const destinations = store.getConfiguredDestinations();
+  if (destinations.length === 0) throw new Error('Configura e salva almeno una piattaforma RTMP.');
+  if (destinations.some(({ platform }) => platform === 'tiktok')) await verifyNvenc(ffmpegPath);
+
+  sendLiveStatus('starting', { platforms: destinations.map(({ name }) => name) });
+  await waitForObsReady();
+
+  const relay = new RtmpRelay({ ffmpegPath, log });
+  streamRelay = relay;
+  relay.once('exit', (result) => {
+    if (streamRelay !== relay) return;
+    streamRelay = null;
+    liveDestinations = [];
+    if (obsEngine?.streaming) {
+      void obsEngine.stopStream().catch((error) => log('error', `Arresto OBS dopo l'uscita del relay non riuscito: ${error.message}`));
+    }
+    log('error', `Il relay FFmpeg si è arrestato inaspettatamente (exit ${result.code ?? result.signal}).`);
+    sendLiveStatus('error', { message: 'Relay FFmpeg interrotto. Verifica le destinazioni RTMP.' });
+  });
+
+  try {
+    const service = await relay.start(destinations, {
+      verticalCropX: store.getVerticalCropX(),
+    });
+    if (quitting) throw new Error('ShadowStream si sta chiudendo.');
+    await obsEngine.startStream(service);
+    if (streamRelay !== relay || !relay.running) {
+      throw new Error('Il relay RTMP si è interrotto durante l’avvio della diretta.');
+    }
+    liveDestinations = destinations.map(({ name }) => name);
+    sendLiveStatus('live', { platforms: liveDestinations });
+    return true;
+  } catch (error) {
+    if (streamRelay === relay) streamRelay = null;
+    if (obsEngine?.streaming) {
+      try { await obsEngine.stopStream(); } catch (stopError) {
+        log('error', `Arresto stream OBS dopo errore non riuscito: ${stopError.message}`);
+      }
+    }
+    await relay.stop();
+    liveDestinations = [];
+    sendLiveStatus('error', { message: error.message });
+    throw error;
+  }
+}
+
+function requestLiveStart() {
+  if (streamStartPromise) return streamStartPromise;
+  streamStartPromise = startLiveStream()
+    .catch((error) => {
+      log('error', `Avvio diretta non riuscito: ${error.message}`);
+      throw error;
+    })
+    .finally(() => { streamStartPromise = null; });
+  return streamStartPromise;
+}
+
+function stopLiveStream() {
+  if (streamStopPromise) return streamStopPromise;
+  if (!streamRelay && !obsEngine?.streaming && !streamStartPromise) return Promise.resolve(true);
+  streamStopPromise = (async () => {
+    if (streamStartPromise) await streamStartPromise.catch(() => {});
+    sendLiveStatus('stopping', { platforms: liveDestinations });
+    let stopError = null;
+    if (obsEngine?.streaming) {
+      try { await obsEngine.stopStream(); } catch (error) { stopError = error; }
+    }
+    const relay = streamRelay;
+    streamRelay = null;
+    liveDestinations = [];
+    if (relay) await relay.stop();
+    if (stopError) {
+      sendLiveStatus('error', { message: stopError.message });
+      throw stopError;
+    }
+    sendLiveStatus('offline');
+    return true;
+  })().finally(() => { streamStopPromise = null; });
+  return streamStopPromise;
 }
 
 function currentConfiguration() {
@@ -794,6 +1115,98 @@ ipcMain.handle('updates:install', () => {
   return true;
 });
 ipcMain.handle('backend:get-audio-settings', () => audioSettings);
+ipcMain.handle('live:get-settings', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
+  return {
+    destinations: getDestinationStore().getDestinations(),
+    ffmpegPath: getDestinationStore().getFfmpegPath(),
+    verticalCropX: getDestinationStore().getVerticalCropX(),
+    youtubeClientId: getDestinationStore().getYoutubeClientId(),
+    youtubeConnected: Boolean(getDestinationStore().getYoutubeCredentials()),
+    webcamSettings: { ...webcamSettings },
+  };
+});
+ipcMain.handle('live:save-destinations', (event, destinations) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
+  return getDestinationStore().saveDestinations(destinations);
+});
+ipcMain.handle('live:youtube-connect', (event, clientId) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta OAuth non autorizzata.');
+  return connectYoutubeAccount(clientId);
+});
+ipcMain.handle('live:youtube-streams', async (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta YouTube non autorizzata.');
+  return listYoutubeStreams('', youtubeApiFetch);
+});
+ipcMain.handle('live:youtube-use-stream', async (event, streamId) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta YouTube non autorizzata.');
+  const ingest = await getYoutubeStreamIngest('', streamId, youtubeApiFetch);
+  const destinations = getDestinationStore().saveSingleDestination({
+    platform: 'youtube',
+    server: ingest.server,
+    key: ingest.key,
+  });
+  return destinations.find((destination) => destination.platform === 'youtube');
+});
+ipcMain.handle('live:webcam-devices', async (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta webcam non autorizzata.');
+  await waitForObsReady();
+  return obsEngine.getWebcamDevices();
+});
+ipcMain.handle('live:set-webcam-settings', async (event, settings) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta webcam non autorizzata.');
+  if (!isValidWebcamSettings(settings)) throw new TypeError('Impostazioni webcam non valide.');
+  await waitForObsReady();
+  await obsEngine.setWebcamSettings(settings);
+  webcamSettings = { ...settings };
+  saveWebcamSettings();
+  return { ...webcamSettings };
+});
+ipcMain.handle('live:select-ffmpeg', async (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Seleziona ffmpeg.exe',
+    properties: ['openFile'],
+    filters: [{ name: 'FFmpeg', extensions: ['exe'] }],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  const ffmpegPath = result.filePaths[0];
+  if (path.basename(ffmpegPath).toLowerCase() !== 'ffmpeg.exe') {
+    throw new Error('Seleziona il file ffmpeg.exe.');
+  }
+  await verifyFfmpeg(ffmpegPath);
+  return getDestinationStore().saveFfmpegPath(ffmpegPath);
+});
+ipcMain.handle('live:start', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
+  return requestLiveStart();
+});
+ipcMain.handle('live:stop', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
+  return stopLiveStream();
+});
+ipcMain.handle('live:get-status', async (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
+  if (!streamRelay || !obsEngine?.streaming) return { state: 'offline' };
+  const status = await obsEngine.request('GetStreamStatus');
+  if (!status.outputActive) {
+    await stopLiveStream();
+    return {
+      state: 'error',
+      message: 'OBS ha interrotto la diretta; il relay locale è stato fermato.',
+    };
+  }
+  const outputDuration = status.outputDuration;
+  const bitrateKbps = Number.isFinite(outputDuration) && outputDuration > 0
+    && Number.isFinite(status.outputBytes)
+    ? Math.round((status.outputBytes * 8) / outputDuration)
+    : null;
+  return {
+    state: status.outputActive ? 'live' : 'error',
+    bitrateKbps,
+    platforms: liveDestinations,
+  };
+});
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:toggle-maximize', () => {
   if (mainWindow?.isMaximized()) mainWindow.unmaximize();
@@ -973,6 +1386,7 @@ if (!gotTheLock) {
     loadReplaySettings();
     loadCaptureSettings();
     loadZoomSettings();
+    loadWebcamSettings();
     configureUpdater();
     session.defaultSession.setPermissionCheckHandler((webContents, permission, _origin, details) => (
       permission === 'display-capture'
@@ -1004,7 +1418,8 @@ if (!gotTheLock) {
 
   app.on('before-quit', (event) => {
     quitting = true;
-    if ((!backend || backend.exitCode !== null) && !obsEngine?.running) return;
+    if ((!backend || backend.exitCode !== null) && !obsEngine?.running
+      && !obsEngine?.connecting && !streamRelay && !streamStartPromise) return;
 
     event.preventDefault();
     void stopServices().then(() => app.quit());
@@ -1013,6 +1428,9 @@ if (!gotTheLock) {
   process.on('exit', () => {
     if (backend && backend.exitCode === null) {
       try { backend.kill(); } catch { /* ignore */ }
+    }
+    if (streamRelay?.process && streamRelay.process.exitCode === null) {
+      try { streamRelay.process.kill(); } catch { /* ignore */ }
     }
     if (obsEngine?.running) {
       try { obsEngine.process.kill(); } catch { /* ignore */ }

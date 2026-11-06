@@ -23,8 +23,39 @@ const els = {
   btnClose: document.getElementById('btn-close'),
   content: document.querySelector('.content'),
   navDashboard: document.getElementById('nav-dashboard'),
+  navLive: document.getElementById('nav-live'),
   navClips: document.getElementById('nav-clips'),
   navSettings: document.getElementById('nav-settings'),
+  liveState: document.getElementById('live-state'),
+  liveBitrate: document.getElementById('live-bitrate'),
+  liveMessage: document.getElementById('live-message'),
+  liveStart: document.getElementById('btn-live-start'),
+  liveStop: document.getElementById('btn-live-stop'),
+  liveFfmpegPath: document.getElementById('live-ffmpeg-path'),
+  liveSelectFfmpeg: document.getElementById('btn-select-ffmpeg'),
+  tiktokCrop: document.getElementById('live-tiktok-crop'),
+  tiktokCropValue: document.getElementById('live-tiktok-crop-value'),
+  youtubeClientId: document.getElementById('youtube-client-id'),
+  youtubeConnect: document.getElementById('btn-youtube-connect'),
+  youtubeAccountStatus: document.getElementById('youtube-account-status'),
+  youtubeStreams: document.getElementById('youtube-stream-select'),
+  youtubeRefreshStreams: document.getElementById('btn-youtube-refresh-streams'),
+  youtubeUseStream: document.getElementById('btn-youtube-use-stream'),
+  webcamEnabled: document.getElementById('live-webcam-enabled'),
+  webcamDevice: document.getElementById('live-webcam-device'),
+  webcamRefresh: document.getElementById('btn-webcam-refresh'),
+  webcamX: document.getElementById('live-webcam-x'),
+  webcamY: document.getElementById('live-webcam-y'),
+  webcamWidth: document.getElementById('live-webcam-width'),
+  webcamHeight: document.getElementById('live-webcam-height'),
+  webcamXValue: document.getElementById('live-webcam-x-value'),
+  webcamYValue: document.getElementById('live-webcam-y-value'),
+  webcamWidthValue: document.getElementById('live-webcam-width-value'),
+  webcamHeightValue: document.getElementById('live-webcam-height-value'),
+  webcamChroma: document.getElementById('live-webcam-chroma'),
+  webcamBorder: document.getElementById('live-webcam-border'),
+  webcamBorderColor: document.getElementById('live-webcam-border-color'),
+  webcamApply: document.getElementById('btn-webcam-apply'),
 
   // Slider & Buffer
   bufferSlider: document.getElementById('buffer-slider'),
@@ -684,20 +715,365 @@ api.onUpdateStatus((status) => {
 
 function selectView(view) {
   const settingsVisible = view === 'settings';
+  const liveVisible = view === 'live';
   els.content.classList.toggle('show-settings', settingsVisible);
+  els.content.classList.toggle('show-live', liveVisible);
   for (const [button, selected] of [
     [els.navDashboard, view === 'dashboard'],
+    [els.navLive, liveVisible],
     [els.navSettings, settingsVisible],
   ]) {
     button.classList.toggle('active', selected);
     if (selected) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
+  if (liveVisible && !webcamDevicesLoaded) void loadWebcamDevices();
 }
 
 els.navDashboard.addEventListener('click', () => selectView('dashboard'));
+els.navLive.addEventListener('click', () => selectView('live'));
 els.navSettings.addEventListener('click', () => selectView('settings'));
 els.navClips.addEventListener('click', () => api.openClips());
+
+const LIVE_PLATFORMS = [
+  { id: 'twitch', name: 'Twitch' },
+  { id: 'youtube', name: 'YouTube' },
+  { id: 'tiktok', name: 'TikTok' },
+  { id: 'kick', name: 'Kick' },
+];
+let liveState = 'offline';
+let liveStatusTimer = null;
+let webcamDevicesLoaded = false;
+let savedWebcamDeviceId = null;
+
+function platformElements(platform) {
+  return {
+    checkbox: document.getElementById(`live-${platform.id}-enabled`),
+    server: document.getElementById(`live-${platform.id}-server`),
+    key: document.getElementById(`live-${platform.id}-key`),
+    status: document.getElementById(`live-${platform.id}-status`),
+    bitrate: document.getElementById(`live-${platform.id}-bitrate`),
+    card: document.querySelector(`[data-live-platform="${platform.id}"]`),
+  };
+}
+
+function updatePlatformBitrates(status) {
+  const activePlatforms = new Set((status.platforms || []).map((name) => name.toLowerCase()));
+  for (const platform of LIVE_PLATFORMS) {
+    const item = platformElements(platform);
+    if (!activePlatforms.has(platform.name.toLowerCase()) || status.state !== 'live') {
+      item.bitrate.textContent = '—';
+    } else if (platform.id === 'tiktok') {
+      item.bitrate.textContent = '~6.00 Mbps NVENC target';
+    } else if (Number.isFinite(status.bitrateKbps)) {
+      item.bitrate.textContent = `${(status.bitrateKbps / 1000).toFixed(2)} Mbps`;
+    } else {
+      item.bitrate.textContent = 'Rilevamento…';
+    }
+  }
+}
+
+function setLiveState(status) {
+  liveState = status.state || 'offline';
+  const active = liveState === 'live' || liveState === 'starting' || liveState === 'stopping';
+  const labels = {
+    offline: 'Offline',
+    starting: 'Avvio relay e OBS…',
+    live: 'Diretta in corso',
+    stopping: 'Arresto diretta…',
+    error: 'Errore diretta',
+  };
+  els.liveState.textContent = labels[liveState] || labels.error;
+  els.liveState.classList.toggle('is-error', liveState === 'error');
+  els.liveStart.disabled = active;
+  els.liveStop.disabled = liveState !== 'live' && liveState !== 'stopping';
+  els.liveMessage.textContent = status.message || '';
+
+  const activePlatforms = new Set((status.platforms || []).map((name) => name.toLowerCase()));
+  for (const platform of LIVE_PLATFORMS) {
+    const item = platformElements(platform);
+    const isLive = liveState === 'live' && activePlatforms.has(platform.name.toLowerCase());
+    item.card.classList.toggle('is-live', isLive);
+    item.card.classList.toggle('is-error', liveState === 'error' && item.checkbox.checked);
+    item.status.textContent = isLive
+      ? 'LIVE'
+      : item.checkbox.checked && liveState === 'offline' ? 'CONFIGURATO' : 'OFFLINE';
+    item.checkbox.disabled = active;
+    item.server.disabled = active;
+    item.key.disabled = active;
+  }
+  updatePlatformBitrates(status);
+  if (Number.isFinite(status.bitrateKbps)) {
+    els.liveBitrate.textContent = `${(status.bitrateKbps / 1000).toFixed(2)} Mbps`;
+  } else if (liveState !== 'live') {
+    els.liveBitrate.textContent = '—';
+  }
+
+  clearInterval(liveStatusTimer);
+  liveStatusTimer = liveState === 'live'
+    ? setInterval(refreshLiveStatus, 2000)
+    : null;
+}
+
+async function refreshLiveStatus() {
+  try {
+    const status = await api.getLiveStatus();
+    if (status.state === 'live') {
+      els.liveBitrate.textContent = Number.isFinite(status.bitrateKbps)
+        ? `${(status.bitrateKbps / 1000).toFixed(2)} Mbps`
+        : '—';
+      updatePlatformBitrates(status);
+    } else {
+      setLiveState(status);
+    }
+  } catch (error) {
+    console.error('Impossibile leggere lo stato della diretta:', error);
+    els.liveMessage.textContent = error.message;
+  }
+}
+
+async function loadLiveSettings() {
+  const settings = await api.getLiveSettings();
+  for (const platform of LIVE_PLATFORMS) {
+    const saved = settings.destinations.find((destination) => destination.platform === platform.id);
+    const item = platformElements(platform);
+    item.checkbox.checked = Boolean(saved?.configured);
+    if (saved) item.server.value = saved.server;
+    item.key.placeholder = saved?.configured ? 'Salvata e protetta da Windows' : '';
+    item.status.textContent = saved?.configured ? 'CONFIGURATO' : 'OFFLINE';
+  }
+  els.liveFfmpegPath.textContent = settings.ffmpegPath
+    ? `FFmpeg selezionato: ${settings.ffmpegPath}`
+    : 'FFmpeg richiesto, non incluso nell’installer. Seleziona un ffmpeg.exe già installato.';
+  els.tiktokCrop.value = String(Math.round((settings.verticalCropX ?? 0.5) * 100));
+  els.tiktokCropValue.value = `${els.tiktokCrop.value}%`;
+  els.youtubeClientId.value = settings.youtubeClientId || '';
+  els.youtubeAccountStatus.textContent = settings.youtubeConnected ? 'COLLEGATO' : 'NON COLLEGATO';
+  const webcam = settings.webcamSettings;
+  if (webcam) {
+    els.webcamEnabled.checked = webcam.enabled;
+    els.webcamX.value = String(webcam.x);
+    els.webcamY.value = String(webcam.y);
+    els.webcamWidth.value = String(webcam.width);
+    els.webcamHeight.value = String(webcam.height);
+    els.webcamChroma.checked = webcam.chromaKeyEnabled;
+    els.webcamBorder.checked = webcam.borderEnabled;
+    els.webcamBorderColor.value = webcam.borderColor;
+    savedWebcamDeviceId = webcam.deviceId;
+    renderWebcamControls();
+  }
+  if (settings.youtubeConnected) void loadYoutubeStreams();
+}
+
+async function saveLiveSettings() {
+  const destinations = LIVE_PLATFORMS.flatMap((platform) => {
+    const item = platformElements(platform);
+    return item.checkbox.checked ? [{
+      platform: platform.id,
+      server: item.server.value,
+      key: item.key.value,
+    }] : [];
+  });
+  const saved = await api.saveLiveDestinations(destinations);
+  for (const platform of LIVE_PLATFORMS) {
+    const item = platformElements(platform);
+    const configured = saved.some((destination) => destination.platform === platform.id);
+    item.key.value = '';
+    item.key.placeholder = configured ? 'Salvata e protetta da Windows' : '';
+    item.status.textContent = configured ? 'CONFIGURATO' : 'OFFLINE';
+  }
+  return saved;
+}
+
+els.liveStart.addEventListener('click', async () => {
+  els.liveStart.disabled = true;
+  els.liveMessage.textContent = '';
+  try {
+    await saveLiveSettings();
+    await api.startLive();
+  } catch (error) {
+    console.error('Avvio multi-streaming non riuscito:', error);
+    setLiveState({ state: 'error', message: error.message });
+  }
+});
+
+els.liveStop.addEventListener('click', async () => {
+  els.liveStop.disabled = true;
+  try {
+    await api.stopLive();
+  } catch (error) {
+    console.error('Arresto multi-streaming non riuscito:', error);
+    setLiveState({ state: 'error', message: error.message });
+  }
+});
+
+els.liveSelectFfmpeg.addEventListener('click', async () => {
+  els.liveSelectFfmpeg.disabled = true;
+  try {
+    const selected = await api.selectFfmpeg();
+    if (selected) {
+      els.liveFfmpegPath.textContent = `FFmpeg selezionato: ${selected}`;
+      els.liveMessage.textContent = '';
+    }
+  } catch (error) {
+    console.error('Selezione FFmpeg non riuscita:', error);
+    els.liveMessage.textContent = error.message;
+  } finally {
+    els.liveSelectFfmpeg.disabled = false;
+  }
+});
+
+els.tiktokCrop.addEventListener('input', () => {
+  els.tiktokCropValue.value = `${els.tiktokCrop.value}%`;
+});
+els.tiktokCrop.addEventListener('change', async () => {
+  try {
+    await api.setVerticalCropX(Number(els.tiktokCrop.value) / 100);
+    els.liveMessage.textContent = 'Area del crop TikTok salvata.';
+  } catch (error) {
+    console.error('Salvataggio del crop TikTok non riuscito:', error);
+    els.liveMessage.textContent = error.message;
+  }
+});
+
+async function loadYoutubeStreams() {
+  els.youtubeRefreshStreams.disabled = true;
+  try {
+    const streams = await api.getYoutubeStreams();
+    els.youtubeStreams.replaceChildren(new Option(
+      streams.length > 0 ? 'Seleziona un live stream...' : 'Nessun live stream disponibile',
+      '',
+    ));
+    for (const stream of streams) {
+      const option = new Option(`${stream.title} (${stream.status})`, stream.id);
+      els.youtubeStreams.add(option);
+    }
+    if (streams.length === 0) {
+      els.liveMessage.textContent = 'Crea almeno un live stream nel dashboard YouTube e aggiorna l’elenco.';
+    }
+  } catch (error) {
+    console.error('Impossibile caricare le live YouTube:', error);
+    els.liveMessage.textContent = error.message;
+  } finally {
+    els.youtubeRefreshStreams.disabled = false;
+  }
+}
+
+els.youtubeConnect.addEventListener('click', async () => {
+  const clientId = els.youtubeClientId.value.trim();
+  els.youtubeConnect.disabled = true;
+  els.liveMessage.textContent = 'Completa l’autorizzazione YouTube nel browser predefinito...';
+  try {
+    await api.connectYoutube(clientId);
+    els.youtubeAccountStatus.textContent = 'COLLEGATO';
+    await loadYoutubeStreams();
+  } catch (error) {
+    console.error('Collegamento YouTube non riuscito:', error);
+    els.youtubeAccountStatus.textContent = 'NON COLLEGATO';
+    els.liveMessage.textContent = error.message;
+  } finally {
+    els.youtubeConnect.disabled = false;
+  }
+});
+
+els.youtubeRefreshStreams.addEventListener('click', loadYoutubeStreams);
+
+els.youtubeUseStream.addEventListener('click', async () => {
+  const streamId = els.youtubeStreams.value;
+  if (!streamId) {
+    els.liveMessage.textContent = 'Seleziona prima un live stream YouTube.';
+    return;
+  }
+  els.youtubeUseStream.disabled = true;
+  try {
+    const saved = await api.useYoutubeStream(streamId);
+    const item = platformElements({ id: 'youtube' });
+    item.checkbox.checked = true;
+    item.server.value = saved.server;
+    item.key.value = '';
+    item.key.placeholder = 'Recuperata da YouTube e protetta da Windows';
+    item.status.textContent = 'CONFIGURATO';
+    els.liveMessage.textContent = 'Server e chiave YouTube salvati in modo protetto.';
+  } catch (error) {
+    console.error('Recupero stream key YouTube non riuscito:', error);
+    els.liveMessage.textContent = error.message;
+  } finally {
+    els.youtubeUseStream.disabled = false;
+  }
+});
+
+function renderWebcamControls() {
+  const width = Number(els.webcamWidth.value);
+  const height = Number(els.webcamHeight.value);
+  els.webcamX.max = String(3440 - width);
+  els.webcamY.max = String(1440 - height);
+  els.webcamX.value = String(Math.min(Number(els.webcamX.value), 3440 - width));
+  els.webcamY.value = String(Math.min(Number(els.webcamY.value), 1440 - height));
+  els.webcamXValue.value = els.webcamX.value;
+  els.webcamYValue.value = els.webcamY.value;
+  els.webcamWidthValue.value = els.webcamWidth.value;
+  els.webcamHeightValue.value = els.webcamHeight.value;
+}
+
+for (const input of [els.webcamX, els.webcamY, els.webcamWidth, els.webcamHeight]) {
+  input.addEventListener('input', renderWebcamControls);
+}
+
+async function loadWebcamDevices() {
+  els.webcamRefresh.disabled = true;
+  try {
+    const devices = await api.getWebcamDevices();
+    const selectedId = els.webcamDevice.value || savedWebcamDeviceId || '';
+    els.webcamDevice.replaceChildren(new Option(
+      devices.length > 0 ? 'Seleziona una webcam...' : 'Nessuna webcam disponibile',
+      '',
+    ));
+    for (const device of devices) {
+      els.webcamDevice.add(new Option(device.name, device.id));
+    }
+    if (devices.some((device) => device.id === selectedId)) els.webcamDevice.value = selectedId;
+    webcamDevicesLoaded = true;
+    if (devices.length === 0) els.liveMessage.textContent = 'OBS non rileva webcam DirectShow. Verifica che il dispositivo sia collegato.';
+  } catch (error) {
+    console.error('Impossibile elencare le webcam OBS:', error);
+    els.liveMessage.textContent = error.message;
+  } finally {
+    els.webcamRefresh.disabled = false;
+  }
+}
+
+els.webcamRefresh.addEventListener('click', loadWebcamDevices);
+els.webcamApply.addEventListener('click', async () => {
+  els.webcamApply.disabled = true;
+  try {
+    const settings = await api.setWebcamSettings({
+      enabled: els.webcamEnabled.checked,
+      deviceId: els.webcamDevice.value || null,
+      x: Number(els.webcamX.value),
+      y: Number(els.webcamY.value),
+      width: Number(els.webcamWidth.value),
+      height: Number(els.webcamHeight.value),
+      chromaKeyEnabled: els.webcamChroma.checked,
+      borderEnabled: els.webcamBorder.checked,
+      borderColor: els.webcamBorderColor.value,
+    });
+    savedWebcamDeviceId = settings.deviceId;
+    els.liveMessage.textContent = settings.enabled
+      ? 'Overlay webcam applicato alla scena OBS.'
+      : 'Webcam disattivata.';
+  } catch (error) {
+    console.error('Configurazione webcam non riuscita:', error);
+    els.liveMessage.textContent = error.message;
+  } finally {
+    els.webcamApply.disabled = false;
+  }
+});
+
+api.onLiveStatus(setLiveState);
+loadLiveSettings().catch((error) => {
+  console.error('Impossibile caricare le impostazioni Live:', error);
+  els.liveMessage.textContent = error.message;
+});
 
 // Initial calls
 setProgress(0);
