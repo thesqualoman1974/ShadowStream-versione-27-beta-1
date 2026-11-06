@@ -292,11 +292,25 @@
               <p>Configura gli endpoint RTMP delle piattaforme e avvia una sola diretta. Le chiavi sono protette con la cifratura di Windows.</p>
             </header>
 
+            <div class="live-toolbar panel" role="region" aria-label="Controlli e stato diretta">
+              <div class="live-status-row">
+                <div class="live-status-details">
+                  <strong id="live-state" role="status" aria-live="polite">Offline</strong>
+                  <span>Bitrate OBS: <strong id="live-bitrate">—</strong></span>
+                </div>
+                <div class="live-actions">
+                <button id="btn-live-start" class="btn-primary" type="button" disabled>AVVIA TUTTE LE DIRETTE</button>
+                <button id="btn-live-stop" class="btn-secondary" type="button" disabled>Ferma dirette</button>
+                </div>
+              </div>
+              <p id="live-message" class="settings-help" role="status" aria-live="polite"></p>
+            </div>
+
             <section class="panel live-ffmpeg-card" aria-labelledby="live-ffmpeg-title">
               <div class="live-ffmpeg-heading">
-                <div>
-                  <span class="section-tag">PRIMA DI ANDARE IN DIRETTA</span>
-                  <h2 id="live-ffmpeg-title">Configura FFmpeg</h2>
+                <div class="live-ffmpeg-status">
+                  <span class="section-tag">RELAY LOCALE</span>
+                  <h2 id="live-ffmpeg-title">FFmpeg</h2>
                 </div>
                 <button id="btn-select-ffmpeg" class="btn-secondary" type="button">Seleziona ffmpeg.exe</button>
               </div>
@@ -304,30 +318,12 @@
               <p class="live-ffmpeg-hint">Se hai scaricato FFmpeg, scegli <code>bin\ffmpeg.exe</code> nella cartella estratta.</p>
             </section>
 
-            <div class="live-toolbar panel">
-              <div class="live-status-row">
-                <strong id="live-state" role="status" aria-live="polite">Offline</strong>
-                <span>Bitrate sorgente OBS: <strong id="live-bitrate">—</strong></span>
-              </div>
-              <div class="live-actions">
-                <button id="btn-live-start" class="btn-primary" type="button" disabled>AVVIA TUTTE LE DIRETTE</button>
-                <button id="btn-live-stop" class="btn-secondary" type="button" disabled>Ferma dirette</button>
-              </div>
-              <p id="live-message" class="settings-help" role="status" aria-live="polite"></p>
-              <p class="settings-help">Se TikTok è selezionato, ShadowStream crea un’uscita verticale 9:16 con una seconda codifica NVENC; le altre destinazioni mantengono il flusso orizzontale originale.</p>
-            </div>
-
-            <section class="panel live-crop-card">
-              <div class="panel-header">
-                <h2>SMART CROP TIKTOK 9:16</h2>
-                <strong><output id="live-tiktok-crop-value">50%</output></strong>
-              </div>
-              <input id="live-tiktok-crop" type="range" min="0" max="100" step="1" value="50" aria-label="Posizione orizzontale del crop TikTok" />
-              <div class="slider-labels"><span>Sinistra</span><span>Centro</span><span>Destra</span></div>
-              <p class="settings-help">Sposta l’inquadratura verticale mantenendo il ritaglio 9:16 senza deformare l’immagine.</p>
-            </section>
-
-            <div class="live-platform-grid">
+            <details class="live-section" id="live-platforms-section">
+              <summary class="live-section-summary">
+                <span class="live-section-title">Piattaforme RTMP</span>
+                <span class="live-section-description">Twitch, YouTube, TikTok e Kick</span>
+              </summary>
+              <div class="live-platform-grid">
               <section class="panel live-platform-card" data-live-platform="twitch">
                 <div class="live-platform-heading">
                   <label><input id="live-twitch-enabled" type="checkbox" /> Twitch</label>
@@ -409,13 +405,35 @@
                   <input id="live-kick-key" type="password" autocomplete="new-password" />
                 </div>
               </section>
-            </div>
-
-            <section class="panel live-webcam-card">
-              <div class="panel-header">
-                <h2>WEBCAM E OVERLAY</h2>
-                <label class="live-webcam-toggle"><input id="live-webcam-enabled" type="checkbox" /> Abilita webcam</label>
               </div>
+            </details>
+
+            <details class="live-section" id="live-crop-section">
+              <summary class="live-section-summary">
+                <span class="live-section-title">Smart Crop TikTok</span>
+                <span class="live-section-description">Inquadratura verticale 9:16</span>
+              </summary>
+              <section class="panel live-crop-card">
+                <div class="panel-header">
+                  <h2>POSIZIONE ORIZZONTALE</h2>
+                  <strong><output id="live-tiktok-crop-value">50%</output></strong>
+                </div>
+                <input id="live-tiktok-crop" type="range" min="0" max="100" step="1" value="50" aria-label="Posizione orizzontale del crop TikTok" />
+                <div class="slider-labels"><span>Sinistra</span><span>Centro</span><span>Destra</span></div>
+                <p class="settings-help">Sposta l’inquadratura verticale senza deformare l’immagine. TikTok usa una seconda codifica NVENC.</p>
+              </section>
+            </details>
+
+            <details class="live-section" id="live-webcam-section">
+              <summary class="live-section-summary">
+                <span class="live-section-title">Webcam e overlay</span>
+                <span class="live-section-description">Posizione, chromakey e bordo</span>
+              </summary>
+              <section class="panel live-webcam-card">
+                <div class="panel-header">
+                  <h2>WEBCAM E OVERLAY</h2>
+                  <label class="live-webcam-toggle"><input id="live-webcam-enabled" type="checkbox" /> Abilita webcam</label>
+                </div>
               <div class="form-group">
                 <label for="live-webcam-device">Dispositivo</label>
                 <div class="select-wrapper">
@@ -438,8 +456,9 @@
               <label class="live-webcam-toggle"><input id="live-webcam-chroma" type="checkbox" /> Rimuovi sfondo verde (chromakey)</label>
               <label class="live-webcam-toggle"><input id="live-webcam-border" type="checkbox" /> Mostra bordo <input id="live-webcam-border-color" type="color" value="#ffffff" aria-label="Colore bordo webcam" /></label>
               <p class="settings-help">La webcam viene sovrapposta alla scena OBS. Per includerla nel crop TikTok, posizionala nell’area centrale 9:16.</p>
-              <button id="btn-webcam-apply" class="btn-primary" type="button">Applica overlay webcam</button>
-            </section>
+                <button id="btn-webcam-apply" class="btn-primary" type="button">Applica overlay webcam</button>
+              </section>
+            </details>
 
             <p class="settings-help live-oauth-note">YouTube supporta il collegamento desktop OAuth con PKCE e l’importazione di uno stream già creato. Twitch, TikTok e Kick restano configurabili con server e chiave RTMP manuali.</p>
           </section>

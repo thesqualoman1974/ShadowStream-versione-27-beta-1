@@ -253,11 +253,15 @@ body {
 }
 
 .live-toolbar {
-  margin-bottom: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
 .live-status-row,
-.live-actions,
 .live-platform-heading {
   display: flex;
   align-items: center;
@@ -266,28 +270,106 @@ body {
 }
 
 .live-status-row {
+  flex-wrap: wrap;
+  color: var(--text-main);
+}
+
+.live-status-details {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 14px;
   color: var(--text-muted);
   font-size: 11px;
 }
 
-.live-status-row strong {
+.live-status-details > strong {
   color: var(--text-main);
+  font-size: 14px;
 }
 
 .live-actions {
   justify-content: flex-start;
-  margin-top: 4px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.live-actions .btn-primary,
+.live-actions .btn-secondary {
+  min-height: 36px;
 }
 
 .live-platform-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  padding: 12px;
+}
+
+.live-section {
+  margin-top: 10px;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.live-section-summary {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.live-section-summary:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.live-section-summary:focus-visible {
+  outline: 2px solid var(--accent-green);
+  outline-offset: -2px;
+}
+
+.live-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.live-section-summary::before {
+  content: "›";
+  width: 14px;
+  color: var(--accent-green);
+  font-size: 20px;
+  line-height: 1;
+  transform: rotate(0);
+  transition: transform 0.15s ease;
+}
+
+.live-section[open] > .live-section-summary::before {
+  transform: rotate(90deg);
+}
+
+.live-section[open] > .live-section-summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.live-section-title {
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.live-section-description {
+  color: var(--text-muted);
+  font-size: 10px;
 }
 
 .live-crop-card {
   gap: 8px;
-  margin-bottom: 12px;
+  margin: 12px;
 }
 
 .live-crop-card input[type="range"] {
@@ -353,7 +435,7 @@ body {
 }
 
 .live-ffmpeg-card {
-  margin-top: 12px;
+  margin-top: 0;
   border: 1px solid var(--border);
 }
 
@@ -370,6 +452,13 @@ body {
   font-size: 15px;
 }
 
+.live-ffmpeg-status {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .live-ffmpeg-hint {
   color: var(--text-muted);
   font-size: 10px;
@@ -384,7 +473,7 @@ body {
 
 .live-webcam-card {
   gap: 12px;
-  margin-top: 12px;
+  margin: 12px;
 }
 
 .live-webcam-toggle {
