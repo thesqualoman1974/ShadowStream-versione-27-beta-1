@@ -35,7 +35,7 @@
     "win": {
       "target": "nsis",
       "icon": "electron/assets/icon.ico",
-      "artifactName": "ShadowStream-${version}-Setup.${ext}"
+      "artifactName": "ShadowStream-${version}-Setup-64bit.${ext}"
     },
     "nsis": {
       "oneClick": false,

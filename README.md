@@ -91,6 +91,7 @@ filters. The microphone source retains the input device's native channel layout.
 The installer targets 64-bit Windows (`win-x64`) for both Electron and the .NET
 backend. Windows 11 is not available as a 32-bit operating system, so there is no
 separate 32-bit Windows 11 build.
+The installer filename includes `64bit` to make its architecture clear.
 
 ```powershell
 npm run build:win
