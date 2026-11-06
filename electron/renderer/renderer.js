@@ -520,6 +520,9 @@ function setSelectOptions(select, automaticLabel, devices, selectedId, enabled) 
 }
 
 function updateAudioSelection() {
+  clearTimeout(audioVolumeSaveTimeout);
+  const requestId = ++audioVolumeRequestId;
+  setAudioVolumeStatus('pending');
   const outputValue = els.audioOutput.value;
   const inputValue = els.audioMicrophone.value;
   api.setAudioDevices({
@@ -527,9 +530,13 @@ function updateAudioSelection() {
     inputDeviceId: inputValue === 'default' || inputValue === 'disabled' ? null : inputValue,
     systemAudioEnabled: outputValue !== 'disabled',
     microphoneEnabled: inputValue !== 'disabled',
-    systemVolume: Number(els.audioOutputVolume.value),
-    microphoneVolume: Number(els.audioMicrophoneVolume.value),
+    systemVolume: decibelsToVolume(Number(els.audioOutputVolume.value)),
+    microphoneVolume: decibelsToVolume(Number(els.audioMicrophoneVolume.value)),
+  }).then((updated) => {
+    if (updated !== true) throw new Error('OBS non ha confermato le impostazioni audio.');
+    if (requestId === audioVolumeRequestId) setAudioVolumeStatus('applied');
   }).catch((error) => {
+    if (requestId === audioVolumeRequestId) setAudioVolumeStatus('error', error);
     console.error('Impossibile aggiornare i dispositivi audio:', error);
   });
   updateMixerDeviceNames();
@@ -625,15 +632,31 @@ els.audioOutput.addEventListener('change', updateAudioSelection);
 els.audioMicrophone.addEventListener('change', updateAudioSelection);
 
 let audioVolumeSaveTimeout = null;
+let audioVolumeRequestId = 0;
+function setAudioVolumeStatus(state, error = null) {
+  for (const value of [els.audioOutputVolumeValue, els.audioMicrophoneVolumeValue]) {
+    value.classList.toggle('is-pending', state === 'pending');
+    value.classList.toggle('is-applied', state === 'applied');
+    value.classList.toggle('is-error', state === 'error');
+    value.title = state === 'error'
+      ? `OBS non ha applicato il volume: ${error?.message || 'errore sconosciuto'}`
+      : state === 'applied' ? 'Volume applicato al mixer OBS' : 'Applicazione del volume in corso';
+  }
+}
+
 function saveAudioVolumes() {
   clearTimeout(audioVolumeSaveTimeout);
+  const requestId = ++audioVolumeRequestId;
+  setAudioVolumeStatus('pending');
   audioVolumeSaveTimeout = setTimeout(() => {
     api.setAudioVolumes({
       systemVolume: decibelsToVolume(Number(els.audioOutputVolume.value)),
       microphoneVolume: decibelsToVolume(Number(els.audioMicrophoneVolume.value)),
     }).then((updated) => {
-      if (updated !== true) console.error('OBS non ha applicato i nuovi volumi audio.');
+      if (updated !== true) throw new Error('OBS non ha confermato i nuovi volumi audio.');
+      if (requestId === audioVolumeRequestId) setAudioVolumeStatus('applied');
     }).catch((error) => {
+      if (requestId === audioVolumeRequestId) setAudioVolumeStatus('error', error);
       console.error('Impossibile aggiornare i volumi audio:', error);
     });
   }, 100);

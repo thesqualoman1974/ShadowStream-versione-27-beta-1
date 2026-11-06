@@ -487,8 +487,8 @@ input[type="range"]::-webkit-slider-thumb {
   position: relative;
   width: 100%;
   aspect-ratio: 21 / 9;
-  max-height: 420px;
-  min-height: 260px;
+  max-height: min(38vh, 320px);
+  min-height: 180px;
   min-width: 0;
   background: #000;
   border-radius: 8px;
@@ -770,7 +770,7 @@ input[type="range"]::-webkit-slider-thumb {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .content-left {
@@ -783,10 +783,10 @@ input[type="range"]::-webkit-slider-thumb {
   min-width: 0;
   background: var(--bg-panel);
   border-radius: 12px;
-  padding: 12px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .panel-header {
@@ -841,19 +841,19 @@ input[type="range"]::-webkit-slider-thumb {
 .audio-row {
   display: flex;
   min-width: 0;
-  min-height: 158px;
-  gap: 8px;
+  min-height: 110px;
+  gap: 6px;
   align-items: flex-start;
 }
 
 .audio-row .level-meter {
   flex: 0 0 16px;
-  height: 142px;
+  height: 96px;
 }
 
 .audio-volume-control {
   display: flex;
-  flex: 0 0 62px;
+  flex: 0 0 58px;
   min-width: 0;
   flex-direction: column;
   align-items: center;
@@ -868,16 +868,36 @@ input[type="range"]::-webkit-slider-thumb {
   white-space: nowrap;
 }
 
+.audio-volume-value::after {
+  margin-left: 3px;
+  font-weight: 700;
+}
+
+.audio-volume-value.is-pending::after {
+  content: "…";
+  color: #facc15;
+}
+
+.audio-volume-value.is-applied::after {
+  content: "✓";
+  color: var(--accent-green);
+}
+
+.audio-volume-value.is-error::after {
+  content: "!";
+  color: var(--danger);
+}
+
 .audio-volume-fader {
   display: flex;
-  height: 142px;
+  height: 96px;
   align-items: stretch;
   gap: 4px;
 }
 
 .audio-volume-fader input[type="range"] {
   width: 18px;
-  height: 142px;
+  height: 96px;
   margin: 0;
   accent-color: var(--accent-blue);
   cursor: pointer;
@@ -922,7 +942,7 @@ input[type="range"]::-webkit-slider-thumb {
 .level-meter {
   display: flex;
   width: 20px;
-  height: 142px;
+  height: 96px;
   flex-direction: column-reverse;
   gap: 2px;
   padding: 2px;
@@ -987,6 +1007,27 @@ input[type="range"]::-webkit-slider-thumb {
 ::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 3px;
+}
+
+@media (max-height: 800px) {
+  .preview-box {
+    max-height: 30vh;
+    min-height: 160px;
+  }
+
+  .audio-row {
+    min-height: 90px;
+  }
+
+  .audio-row .level-meter,
+  .level-meter {
+    height: 76px;
+  }
+
+  .audio-volume-fader,
+  .audio-volume-fader input[type="range"] {
+    height: 76px;
+  }
 }
 
 @media (max-width: 760px) {
