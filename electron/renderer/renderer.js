@@ -772,49 +772,71 @@ async function restartPreviewStream() {
   stopPreviewStream();
   const requestId = previewRequestId;
   if (!els.preview || !els.previewPlaceholder) return;
-  els.previewPlaceholder.textContent = 'Avvio anteprima live...';
+  const retryDelays = [0, 300, 800, 1500];
+  let lastError = null;
 
-  try {
-    const source = await api.getPreviewSource();
+  for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
     if (requestId !== previewRequestId) return;
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        mandatory: {
-          chromeMediaSource: 'desktop',
-          chromeMediaSourceId: source.id,
-          maxWidth: 1920,
-          maxHeight: 1080,
-          maxFrameRate: 60,
-        },
-      },
-    });
-    if (requestId !== previewRequestId) {
-      for (const track of stream.getTracks()) track.stop();
-      return;
-    }
-
-    const videoTrack = stream.getVideoTracks()[0];
-    if (!videoTrack) {
-      for (const track of stream.getTracks()) track.stop();
-      throw new Error('La sorgente non ha restituito un flusso video.');
-    }
-    previewStream = stream;
-    videoTrack.addEventListener('ended', () => {
+    if (retryDelays[attempt] > 0) {
+      els.previewPlaceholder.textContent = `Attendo la sorgente video... (${attempt + 1}/${retryDelays.length})`;
+      await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
       if (requestId !== previewRequestId) return;
-      stopPreviewStream();
-      els.previewPlaceholder.textContent = 'La sorgente video è stata interrotta.';
-    }, { once: true });
-    els.preview.srcObject = stream;
-    els.preview.hidden = false;
-    els.previewPlaceholder.hidden = true;
-    await els.preview.play();
-  } catch (error) {
-    if (requestId !== previewRequestId) return;
-    stopPreviewStream();
-    els.previewPlaceholder.textContent = `Anteprima non disponibile: ${error.message}`;
+    } else {
+      els.previewPlaceholder.textContent = 'Avvio anteprima live...';
+    }
+
+    let stream = null;
+    try {
+      const source = await api.getPreviewSource();
+      if (requestId !== previewRequestId) return;
+
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          mandatory: {
+            chromeMediaSource: 'desktop',
+            chromeMediaSourceId: source.id,
+            maxWidth: 1920,
+            maxHeight: 1080,
+            maxFrameRate: 60,
+          },
+        },
+      });
+      if (requestId !== previewRequestId) {
+        for (const track of stream.getTracks()) track.stop();
+        return;
+      }
+
+      const videoTrack = stream.getVideoTracks()[0];
+      if (!videoTrack) throw new Error('La sorgente non ha restituito un flusso video.');
+      previewStream = stream;
+      videoTrack.addEventListener('ended', () => {
+        if (requestId !== previewRequestId) return;
+        stopPreviewStream();
+        els.previewPlaceholder.textContent = 'La sorgente video è stata interrotta.';
+      }, { once: true });
+      els.preview.srcObject = stream;
+      els.preview.hidden = false;
+      await els.preview.play();
+      els.previewPlaceholder.hidden = true;
+      return;
+    } catch (error) {
+      if (requestId !== previewRequestId) {
+        for (const track of stream?.getTracks() || []) track.stop();
+        return;
+      }
+      lastError = error;
+      for (const track of stream?.getTracks() || []) track.stop();
+      if (previewStream === stream) previewStream = null;
+      els.preview.pause();
+      els.preview.srcObject = null;
+      els.preview.hidden = true;
+    }
   }
+
+  if (requestId !== previewRequestId) return;
+  stopPreviewStream();
+  els.previewPlaceholder.textContent = `Anteprima non disponibile: ${lastError?.message || 'sorgente video non pronta'}`;
 }
 
 function syncCaptureStatus(status) {

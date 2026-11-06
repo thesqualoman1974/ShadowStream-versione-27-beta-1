@@ -15,6 +15,7 @@ const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const ObsEngine = require('./obs-engine');
+const { applyGainToMeterLevel } = require('./audio-meter');
 
 for (const output of [process.stdout, process.stderr]) {
   output.on('error', (error) => {
@@ -244,8 +245,8 @@ function log(stream, text) {
           && typeof levels.systemCapturing === 'boolean'
           && typeof levels.microphoneCapturing === 'boolean') {
           send('backend:audio-levels', {
-            system: Math.max(0, Math.min(100, levels.system)),
-            microphone: Math.max(0, Math.min(100, levels.microphone)),
+            system: applyGainToMeterLevel(levels.system, audioSettings.systemVolume),
+            microphone: applyGainToMeterLevel(levels.microphone, audioSettings.microphoneVolume),
             systemCapturing: levels.systemCapturing,
             microphoneCapturing: levels.microphoneCapturing,
           });
@@ -864,7 +865,7 @@ ipcMain.handle('backend:get-audio-devices', () => {
   return true;
 });
 
-ipcMain.handle('backend:set-audio-devices', (_event, settings) => {
+ipcMain.handle('backend:set-audio-devices', async (_event, settings) => {
   if (!settings || typeof settings !== 'object'
     || (settings.outputDeviceId !== null && typeof settings.outputDeviceId !== 'string')
     || (settings.inputDeviceId !== null && typeof settings.inputDeviceId !== 'string')
@@ -878,7 +879,7 @@ ipcMain.handle('backend:set-audio-devices', (_event, settings) => {
     return false;
   }
 
-  audioSettings = {
+  const requestedSettings = {
     outputDeviceId: settings.outputDeviceId || null,
     inputDeviceId: settings.inputDeviceId || null,
     systemAudioEnabled: settings.systemAudioEnabled,
@@ -886,13 +887,18 @@ ipcMain.handle('backend:set-audio-devices', (_event, settings) => {
     systemVolume: settings.systemVolume ?? audioSettings.systemVolume,
     microphoneVolume: settings.microphoneVolume ?? audioSettings.microphoneVolume,
   };
-  saveAudioSettings();
   if (captureReady) {
-    const requestedSettings = { ...audioSettings };
     const update = audioSettingsQueue.then(() => obsEngine.setAudioDevices(requestedSettings));
     audioSettingsQueue = update.catch(() => {});
-    void update.catch((error) => log('error', `Cambio dispositivo audio OBS non riuscito: ${error.message}`));
+    try {
+      await update;
+    } catch (error) {
+      log('error', `Cambio dispositivo audio OBS non riuscito: ${error.message}`);
+      throw error;
+    }
   }
+  audioSettings = requestedSettings;
+  saveAudioSettings();
   if (captureReady) {
     const encoded = Buffer.from(JSON.stringify(audioSettings), 'utf8').toString('base64');
     sendCommand(`A ${encoded}`);
@@ -900,7 +906,7 @@ ipcMain.handle('backend:set-audio-devices', (_event, settings) => {
   return true;
 });
 
-ipcMain.handle('backend:set-audio-volumes', (_event, volumes) => {
+ipcMain.handle('backend:set-audio-volumes', async (_event, volumes) => {
   if (!volumes || typeof volumes !== 'object'
     || !isValidAudioVolume(volumes.systemVolume)
     || !isValidAudioVolume(volumes.microphoneVolume)) {
@@ -908,25 +914,25 @@ ipcMain.handle('backend:set-audio-volumes', (_event, volumes) => {
     return false;
   }
 
-  audioSettings = {
+  const requestedSettings = {
     ...audioSettings,
     systemVolume: volumes.systemVolume,
     microphoneVolume: volumes.microphoneVolume,
   };
+
+  if (captureReady) {
+    const update = audioSettingsQueue.then(() => obsEngine.setAudioVolumes(requestedSettings));
+    audioSettingsQueue = update.catch(() => {});
+    try {
+      await update;
+    } catch (error) {
+      log('error', `Aggiornamento volume audio OBS non riuscito: ${error.message}`);
+      throw error;
+    }
+  }
+  audioSettings = requestedSettings;
   saveAudioSettings();
-
-  if (!captureReady) return true;
-
-  const requestedVolumes = {
-    systemVolume: audioSettings.systemVolume,
-    microphoneVolume: audioSettings.microphoneVolume,
-  };
-  const update = audioSettingsQueue.then(() => obsEngine.setAudioVolumes(requestedVolumes));
-  audioSettingsQueue = update.catch(() => {});
-  return update.then(() => true).catch((error) => {
-    log('error', `Aggiornamento volume audio OBS non riuscito: ${error.message}`);
-    return false;
-  });
+  return true;
 });
 
 ipcMain.on('open-clips', () => {
