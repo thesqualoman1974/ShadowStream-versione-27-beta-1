@@ -338,16 +338,20 @@ class ObsEngine extends EventEmitter {
   }
 
   async setAudioVolumes(settings) {
-    await Promise.all([
-      this.request('SetInputVolume', {
-        inputName: DESKTOP_AUDIO_NAME,
-        inputVolumeMul: settings.systemVolume / 100,
-      }),
-      this.request('SetInputVolume', {
-        inputName: MICROPHONE_NAME,
-        inputVolumeMul: settings.microphoneVolume / 100,
-      }),
-    ]);
+    const inputs = [
+      { inputName: DESKTOP_AUDIO_NAME, volume: settings.systemVolume },
+      { inputName: MICROPHONE_NAME, volume: settings.microphoneVolume },
+    ];
+
+    await Promise.all(inputs.map(async ({ inputName, volume }) => {
+      const expectedVolume = volume / 100;
+      await this.request('SetInputVolume', { inputName, inputVolumeMul: expectedVolume });
+      const applied = await this.request('GetInputVolume', { inputName });
+      if (!Number.isFinite(applied.inputVolumeMul)
+        || Math.abs(applied.inputVolumeMul - expectedVolume) > 0.001) {
+        throw new Error(`OBS non ha applicato il volume richiesto a "${inputName}".`);
+      }
+    }));
   }
 
   async setCaptureMode(mode, windowTarget) {

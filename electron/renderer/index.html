@@ -19,7 +19,7 @@
           <nav class="top-nav">
             <span class="nav-item">INSTANT REPLAY</span>
             <span class="nav-item badge">NVENC</span>
-            <span class="nav-item badge secondary" id="version-badge">27 beta 1.1</span>
+            <span class="nav-item badge secondary" id="version-badge">27 beta 1</span>
             <button id="btn-check-updates" class="nav-item update-button" type="button">Aggiorna</button>
           </nav>
         </div>
@@ -156,10 +156,15 @@
                     <span class="meter-segment"></span><span class="meter-segment"></span>
                   </div>
                   <span id="audio-output-name" class="mixer-device">Uscita predefinita</span>
-                </div>
-                <div class="audio-volume-control">
-                  <label for="audio-output-volume">Volume cattura <span id="audio-output-volume-value">100%</span></label>
-                  <input id="audio-output-volume" type="range" min="0" max="200" step="1" value="100" aria-label="Volume cattura audio del PC" />
+                  <div class="audio-volume-control">
+                    <span id="audio-output-volume-value" class="audio-volume-value">0.0 dB</span>
+                    <div class="audio-volume-fader">
+                      <input id="audio-output-volume" type="range" min="-60" max="6" step="1" value="0" aria-label="Volume cattura audio del PC in decibel" />
+                      <div class="audio-volume-scale" aria-hidden="true">
+                        <span>+6</span><span>0</span><span>-6</span><span>-12</span><span>-18</span><span>-24</span><span>-30</span><span>-36</span><span>-42</span><span>-48</span><span>-54</span><span>-60</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="mixer-group">
@@ -187,10 +192,15 @@
                     <span class="meter-segment"></span><span class="meter-segment"></span>
                   </div>
                   <span id="audio-mic-name" class="mixer-device">Microfono predefinito</span>
-                </div>
-                <div class="audio-volume-control">
-                  <label for="audio-mic-volume">Volume microfono <span id="audio-mic-volume-value">100%</span></label>
-                  <input id="audio-mic-volume" type="range" min="0" max="200" step="1" value="100" aria-label="Volume cattura microfono" />
+                  <div class="audio-volume-control">
+                    <span id="audio-mic-volume-value" class="audio-volume-value">0.0 dB</span>
+                    <div class="audio-volume-fader">
+                      <input id="audio-mic-volume" type="range" min="-60" max="6" step="1" value="0" aria-label="Volume cattura microfono in decibel" />
+                      <div class="audio-volume-scale" aria-hidden="true">
+                        <span>+6</span><span>0</span><span>-6</span><span>-12</span><span>-18</span><span>-24</span><span>-30</span><span>-36</span><span>-42</span><span>-48</span><span>-54</span><span>-60</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

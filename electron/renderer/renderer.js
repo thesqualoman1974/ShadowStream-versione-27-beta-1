@@ -496,15 +496,29 @@ function updateAudioSelection() {
   updateMixerDeviceNames();
 }
 
+function volumeToDecibels(volume) {
+  return volume <= 0 ? -60 : Math.max(-60, Math.min(6, 20 * Math.log10(volume / 100)));
+}
+
+function decibelsToVolume(decibels) {
+  return decibels <= -60 ? 0 : Math.min(200, 100 * (10 ** (decibels / 20)));
+}
+
+function formatDecibels(decibels) {
+  return decibels > 0 ? `+${decibels.toFixed(1)} dB` : `${decibels.toFixed(1)} dB`;
+}
+
 function updateAudioVolumeControls(settings) {
   const systemVolume = Number.isFinite(settings?.systemVolume)
     ? Math.max(0, Math.min(200, settings.systemVolume)) : 100;
   const microphoneVolume = Number.isFinite(settings?.microphoneVolume)
     ? Math.max(0, Math.min(200, settings.microphoneVolume)) : 100;
-  els.audioOutputVolume.value = String(systemVolume);
-  els.audioOutputVolumeValue.textContent = `${systemVolume}%`;
-  els.audioMicrophoneVolume.value = String(microphoneVolume);
-  els.audioMicrophoneVolumeValue.textContent = `${microphoneVolume}%`;
+  const systemDecibels = Math.round(volumeToDecibels(systemVolume));
+  const microphoneDecibels = Math.round(volumeToDecibels(microphoneVolume));
+  els.audioOutputVolume.value = String(systemDecibels);
+  els.audioOutputVolumeValue.textContent = formatDecibels(systemDecibels);
+  els.audioMicrophoneVolume.value = String(microphoneDecibels);
+  els.audioMicrophoneVolumeValue.textContent = formatDecibels(microphoneDecibels);
 }
 
 function updateMixerDeviceNames() {
@@ -576,8 +590,8 @@ function saveAudioVolumes() {
   clearTimeout(audioVolumeSaveTimeout);
   audioVolumeSaveTimeout = setTimeout(() => {
     api.setAudioVolumes({
-      systemVolume: Number(els.audioOutputVolume.value),
-      microphoneVolume: Number(els.audioMicrophoneVolume.value),
+      systemVolume: decibelsToVolume(Number(els.audioOutputVolume.value)),
+      microphoneVolume: decibelsToVolume(Number(els.audioMicrophoneVolume.value)),
     }).then((updated) => {
       if (updated !== true) console.error('OBS non ha applicato i nuovi volumi audio.');
     }).catch((error) => {
@@ -587,11 +601,11 @@ function saveAudioVolumes() {
 }
 
 els.audioOutputVolume.addEventListener('input', () => {
-  els.audioOutputVolumeValue.textContent = `${els.audioOutputVolume.value}%`;
+  els.audioOutputVolumeValue.textContent = formatDecibels(Number(els.audioOutputVolume.value));
   saveAudioVolumes();
 });
 els.audioMicrophoneVolume.addEventListener('input', () => {
-  els.audioMicrophoneVolumeValue.textContent = `${els.audioMicrophoneVolume.value}%`;
+  els.audioMicrophoneVolumeValue.textContent = formatDecibels(Number(els.audioMicrophoneVolume.value));
   saveAudioVolumes();
 });
 

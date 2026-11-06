@@ -1,6 +1,6 @@
 # ShadowStream
 
-ShadowStream 27 beta 1.1 is a Windows screen/game replay buffer built with Electron, .NET 8, and OBS Studio.
+ShadowStream 27 beta 1 is a Windows screen/game replay buffer built with Electron, .NET 8, and OBS Studio.
 
 ## Architecture
 
@@ -107,8 +107,8 @@ files. Users are asked before downloading and again before installing.
 
 System output and the default microphone are selected automatically. Use the
 mixer to select another active Windows audio endpoint or disable either source.
-The mixer sliders adjust the captured desktop-audio and microphone gain from 0%
-to 200%; they do not change Windows playback or microphone device volume. OBS
-captures the selected sources; WASAPI meters remain active independently of
+The mixer faders adjust captured desktop-audio and microphone gain from -60 dB
+to +6 dB; they do not change Windows playback or microphone device volume. OBS
+confirms each applied fader level. WASAPI meters remain active independently of
 Replay and recording. "Audio del PC" monitors the selected Windows playback
 endpoint, including game audio.
