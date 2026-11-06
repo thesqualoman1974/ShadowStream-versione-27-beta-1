@@ -373,6 +373,64 @@ select, input[type="text"] {
   cursor: pointer;
 }
 
+.update-dialog {
+  width: min(420px, calc(100vw - 32px));
+  margin: auto;
+  padding: 24px;
+  color: var(--text-main);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+.update-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.68);
+}
+
+.update-dialog h2 {
+  margin-bottom: 12px;
+  font-size: 17px;
+}
+
+.update-dialog p {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.update-dialog progress {
+  width: 100%;
+  height: 8px;
+  margin-top: 16px;
+  accent-color: var(--accent-green);
+}
+
+.update-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.update-dialog-actions button {
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.update-dialog-actions .btn-primary {
+  color: #07110a;
+  background: var(--accent-green);
+  border: 1px solid var(--accent-green);
+  font-weight: 700;
+}
+
+.update-dialog-actions .btn-secondary {
+  color: var(--text-main);
+}
+
 /* --- Slider --- */
 .buffer-slider-container {
   display: flex;
@@ -789,6 +847,31 @@ input[type="range"]::-webkit-slider-thumb {
 
 .audio-row .level-meter {
   flex: 0 0 14px;
+}
+
+.audio-volume-control {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 8px 0 0 24px;
+}
+
+.audio-volume-control label {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.audio-volume-control label span {
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+.audio-volume-control input[type="range"] {
+  height: 4px;
+  accent-color: var(--accent-green);
+  cursor: pointer;
 }
 
 .mixer-device {

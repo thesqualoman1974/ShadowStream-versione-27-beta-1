@@ -1,6 +1,6 @@
 {
   "name": "shadowstream",
-  "version": "27.0.0-beta.1",
+  "version": "27.0.0-beta.1.1",
   "private": true,
   "description": "ShadowStream - replay buffer circolare (Electron + OBS Studio + helper .NET 8)",
   "main": "electron/main.js",

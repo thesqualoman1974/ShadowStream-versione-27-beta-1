@@ -40,6 +40,7 @@ let backendStopPromise = null;
 let captureRunning = false;
 let recording = false;
 let captureReady = false;
+let captureModeQueue = Promise.resolve();
 let pendingReplayStart = false;
 let obsEngine = null;
 let launchedConfiguration = null;
@@ -49,15 +50,25 @@ let zoomSettings = { ...DEFAULT_ZOOM_SETTINGS };
 const MIN_BUFFER_SECONDS = 5 * 60;
 const MAX_BUFFER_SECONDS = 30 * 60;
 const BUFFER_STEP_SECONDS = 5 * 60;
+const DEFAULT_AUDIO_VOLUME = 100;
+const MAX_AUDIO_VOLUME = 200;
 let captureMode = 'display'; // 'display' | 'window'
 let captureWindowTitle = '';
 let captureWindowTarget = null;
+let updateCheckPromise = null;
+let audioSettingsQueue = Promise.resolve();
 let audioSettings = {
   outputDeviceId: null,
   inputDeviceId: null,
   systemAudioEnabled: true,
   microphoneEnabled: true,
+  systemVolume: DEFAULT_AUDIO_VOLUME,
+  microphoneVolume: DEFAULT_AUDIO_VOLUME,
 };
+
+function isValidAudioVolume(value) {
+  return Number.isFinite(value) && value >= 0 && value <= MAX_AUDIO_VOLUME;
+}
 
 function audioSettingsPath() {
   return path.join(app.getPath('userData'), 'audio-settings.json');
@@ -175,6 +186,10 @@ function loadAudioSettings() {
         inputDeviceId: typeof saved.inputDeviceId === 'string' ? saved.inputDeviceId : null,
         systemAudioEnabled: saved.systemAudioEnabled !== false,
         microphoneEnabled: saved.microphoneEnabled !== false,
+        systemVolume: isValidAudioVolume(saved.systemVolume)
+          ? saved.systemVolume : DEFAULT_AUDIO_VOLUME,
+        microphoneVolume: isValidAudioVolume(saved.microphoneVolume)
+          ? saved.microphoneVolume : DEFAULT_AUDIO_VOLUME,
       };
     }
   } catch (error) {
@@ -591,29 +606,24 @@ function configureUpdater() {
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.allowPrerelease = true;
 
-  autoUpdater.on('checking-for-update', () => log('update', 'Controllo aggiornamenti beta…'));
-  autoUpdater.on('update-not-available', () => log('update', 'ShadowStream è aggiornato.'));
-  autoUpdater.on('error', (error) => log('error', `Aggiornamento non riuscito: ${error.message}`));
+  autoUpdater.on('checking-for-update', () => {
+    log('update', 'Controllo aggiornamenti beta…');
+    send('update:status', { state: 'checking' });
+  });
+  autoUpdater.on('update-not-available', () => {
+    log('update', 'ShadowStream è aggiornato.');
+    send('update:status', { state: 'not-available' });
+  });
+  autoUpdater.on('error', (error) => {
+    log('error', `Aggiornamento non riuscito: ${error.message}`);
+    send('update:status', { state: 'error', message: error.message });
+  });
   autoUpdater.on('download-progress', (progress) => {
     send('update:status', { state: 'downloading', percent: Math.round(progress.percent) });
   });
-  autoUpdater.on('update-available', async (info) => {
+  autoUpdater.on('update-available', (info) => {
     log('update', `Disponibile la versione ${info.version}.`);
     send('update:status', { state: 'available', version: info.version });
-    const result = await dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      buttons: ['Scarica aggiornamento', 'Più tardi'],
-      defaultId: 0,
-      cancelId: 1,
-      title: 'Aggiornamento ShadowStream',
-      message: `È disponibile la versione ${info.version}.`,
-      detail: 'Vuoi scaricare l’aggiornamento adesso?',
-    });
-    if (result.response === 0) {
-      autoUpdater.downloadUpdate().catch((error) => {
-        log('error', `Download aggiornamento non riuscito: ${error.message}`);
-      });
-    }
   });
   autoUpdater.on('update-downloaded', async (info) => {
     send('update:status', { state: 'downloaded', version: info.version });
@@ -639,13 +649,33 @@ async function installDownloadedUpdate() {
 function checkForUpdates() {
   if (!app.isPackaged) {
     log('update', 'Il controllo aggiornamenti è disponibile nella versione installata.');
+    send('update:status', { state: 'unsupported' });
     return Promise.resolve(false);
   }
 
-  return autoUpdater.checkForUpdates()
+  if (updateCheckPromise) return updateCheckPromise;
+
+  updateCheckPromise = autoUpdater.checkForUpdates()
     .then(() => true)
     .catch((error) => {
       log('error', `Controllo aggiornamenti non riuscito: ${error.message}`);
+      send('update:status', { state: 'error', message: error.message });
+      return false;
+    })
+    .finally(() => {
+      updateCheckPromise = null;
+    });
+  return updateCheckPromise;
+}
+
+function downloadUpdate() {
+  if (!app.isPackaged) return Promise.resolve(false);
+  send('update:status', { state: 'downloading', percent: 0 });
+  return autoUpdater.downloadUpdate()
+    .then(() => true)
+    .catch((error) => {
+      log('error', `Download aggiornamento non riuscito: ${error.message}`);
+      send('update:status', { state: 'error', message: error.message });
       return false;
     });
 }
@@ -730,6 +760,7 @@ ipcMain.handle('backend:get-capture-settings', () => ({
 ipcMain.handle('backend:get-zoom-settings', () => ({ ...zoomSettings }));
 ipcMain.handle('capture:preview-source', getPreviewSource);
 ipcMain.handle('updates:check', checkForUpdates);
+ipcMain.handle('updates:download', downloadUpdate);
 ipcMain.handle('backend:get-audio-settings', () => audioSettings);
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:toggle-maximize', () => {
@@ -763,7 +794,11 @@ ipcMain.handle('backend:set-zoom-settings', (_event, settings) => {
   return true;
 });
 
-ipcMain.handle('backend:set-capture-mode', (_event, mode, windowTarget) => {
+ipcMain.handle('backend:set-capture-mode', async (_event, mode, windowTarget) => {
+  if (mode !== 'display' && mode !== 'window') {
+    log('error', `Modalità di cattura non valida: ${mode}`);
+    return false;
+  }
   const useWindow = mode === 'window';
   const targetIsValid = windowTarget
     && typeof windowTarget.title === 'string'
@@ -782,9 +817,21 @@ ipcMain.handle('backend:set-capture-mode', (_event, mode, windowTarget) => {
   } : null;
   captureWindowTitle = captureWindowTarget?.title || '';
   saveCaptureSettings();
-  if (captureReady) void obsEngine.setCaptureMode(captureMode, captureWindowTarget)
-    .then(() => obsEngine.setZoom(zoomSettings))
-    .catch((error) => log('error', `Cambio sorgente di cattura non riuscito: ${error.message}`));
+  if (captureReady) {
+    const requestedMode = captureMode;
+    const requestedTarget = captureWindowTarget;
+    const applyMode = captureModeQueue.then(async () => {
+      await obsEngine.setCaptureMode(requestedMode, requestedTarget);
+      await obsEngine.setZoom(zoomSettings);
+    });
+    captureModeQueue = applyMode.catch(() => {});
+    try {
+      await applyMode;
+    } catch (error) {
+      log('error', `Cambio sorgente di cattura non riuscito: ${error.message}`);
+      throw error;
+    }
+  }
   return true;
 });
 
@@ -805,7 +852,9 @@ ipcMain.handle('backend:set-audio-devices', (_event, settings) => {
     || (typeof settings.outputDeviceId === 'string' && settings.outputDeviceId.length > 512)
     || (typeof settings.inputDeviceId === 'string' && settings.inputDeviceId.length > 512)
     || typeof settings.systemAudioEnabled !== 'boolean'
-    || typeof settings.microphoneEnabled !== 'boolean') {
+    || typeof settings.microphoneEnabled !== 'boolean'
+    || (settings.systemVolume !== undefined && !isValidAudioVolume(settings.systemVolume))
+    || (settings.microphoneVolume !== undefined && !isValidAudioVolume(settings.microphoneVolume))) {
     log('error', 'Selezione dei dispositivi audio non valida.');
     return false;
   }
@@ -815,15 +864,50 @@ ipcMain.handle('backend:set-audio-devices', (_event, settings) => {
     inputDeviceId: settings.inputDeviceId || null,
     systemAudioEnabled: settings.systemAudioEnabled,
     microphoneEnabled: settings.microphoneEnabled,
+    systemVolume: settings.systemVolume ?? audioSettings.systemVolume,
+    microphoneVolume: settings.microphoneVolume ?? audioSettings.microphoneVolume,
   };
   saveAudioSettings();
-  if (captureReady) void obsEngine.setAudioDevices(audioSettings)
-    .catch((error) => log('error', `Cambio dispositivo audio OBS non riuscito: ${error.message}`));
+  if (captureReady) {
+    const requestedSettings = { ...audioSettings };
+    const update = audioSettingsQueue.then(() => obsEngine.setAudioDevices(requestedSettings));
+    audioSettingsQueue = update.catch(() => {});
+    void update.catch((error) => log('error', `Cambio dispositivo audio OBS non riuscito: ${error.message}`));
+  }
   if (captureReady) {
     const encoded = Buffer.from(JSON.stringify(audioSettings), 'utf8').toString('base64');
     sendCommand(`A ${encoded}`);
   }
   return true;
+});
+
+ipcMain.handle('backend:set-audio-volumes', (_event, volumes) => {
+  if (!volumes || typeof volumes !== 'object'
+    || !isValidAudioVolume(volumes.systemVolume)
+    || !isValidAudioVolume(volumes.microphoneVolume)) {
+    log('error', 'Livelli volume audio non validi.');
+    return false;
+  }
+
+  audioSettings = {
+    ...audioSettings,
+    systemVolume: volumes.systemVolume,
+    microphoneVolume: volumes.microphoneVolume,
+  };
+  saveAudioSettings();
+
+  if (!captureReady) return true;
+
+  const requestedVolumes = {
+    systemVolume: audioSettings.systemVolume,
+    microphoneVolume: audioSettings.microphoneVolume,
+  };
+  const update = audioSettingsQueue.then(() => obsEngine.setAudioVolumes(requestedVolumes));
+  audioSettingsQueue = update.catch(() => {});
+  return update.then(() => true).catch((error) => {
+    log('error', `Aggiornamento volume audio OBS non riuscito: ${error.message}`);
+    return false;
+  });
 });
 
 ipcMain.on('open-clips', () => {

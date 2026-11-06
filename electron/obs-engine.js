@@ -334,6 +334,20 @@ class ObsEngine extends EventEmitter {
         inputMuted: !settings.microphoneEnabled,
       }),
     ]);
+    await this.setAudioVolumes(settings);
+  }
+
+  async setAudioVolumes(settings) {
+    await Promise.all([
+      this.request('SetInputVolume', {
+        inputName: DESKTOP_AUDIO_NAME,
+        inputVolumeMul: settings.systemVolume / 100,
+      }),
+      this.request('SetInputVolume', {
+        inputName: MICROPHONE_NAME,
+        inputVolumeMul: settings.microphoneVolume / 100,
+      }),
+    ]);
   }
 
   async setCaptureMode(mode, windowTarget) {

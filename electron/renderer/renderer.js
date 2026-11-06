@@ -12,6 +12,12 @@ const els = {
   btnToggleReplay: document.getElementById('btn-toggle-replay'),
   btnToggleRecord: document.getElementById('btn-toggle-record'),
   btnCheckUpdates: document.getElementById('btn-check-updates'),
+  updateDialog: document.getElementById('update-dialog'),
+  updateDialogTitle: document.getElementById('update-dialog-title'),
+  updateDialogMessage: document.getElementById('update-dialog-message'),
+  updateProgress: document.getElementById('update-progress'),
+  btnUpdateDownload: document.getElementById('btn-update-download'),
+  btnUpdateClose: document.getElementById('btn-update-close'),
   btnMinimize: document.getElementById('btn-minimize'),
   btnMaximize: document.getElementById('btn-maximize'),
   btnClose: document.getElementById('btn-close'),
@@ -54,6 +60,10 @@ const els = {
   audioMicrophoneStatus: document.getElementById('audio-mic-status'),
   audioOutputName: document.getElementById('audio-output-name'),
   audioMicrophoneName: document.getElementById('audio-mic-name'),
+  audioOutputVolume: document.getElementById('audio-output-volume'),
+  audioOutputVolumeValue: document.getElementById('audio-output-volume-value'),
+  audioMicrophoneVolume: document.getElementById('audio-mic-volume'),
+  audioMicrophoneVolumeValue: document.getElementById('audio-mic-volume-value'),
 };
 
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -240,26 +250,43 @@ function selectedWindowTarget() {
   }
 }
 
+let captureModeRequestId = 0;
+
+async function applyCaptureMode(mode) {
+  const requestId = ++captureModeRequestId;
+  const useWindow = mode === 'window';
+  els.btnModeGame.classList.toggle('active', useWindow);
+  els.btnModeScreen.classList.toggle('active', !useWindow);
+  if (gameWindowGroup) gameWindowGroup.hidden = !useWindow;
+
+  const target = useWindow ? selectedWindowTarget() : null;
+  if (useWindow && !target) {
+    stopPreviewStream();
+    api.getWindows().catch((error) => console.error('Impossibile aggiornare le finestre:', error));
+    return;
+  }
+
+  stopPreviewStream();
+  els.previewPlaceholder.textContent = 'Cambio sorgente di cattura...';
+  try {
+    const updated = await api.setCaptureMode(mode, target);
+    if (updated !== true) throw new Error('OBS non ha accettato la sorgente selezionata.');
+    if (requestId !== captureModeRequestId) return;
+    await restartPreviewStream();
+  } catch (error) {
+    if (requestId !== captureModeRequestId) return;
+    console.error('Impossibile cambiare sorgente di cattura:', error);
+    stopPreviewStream();
+    els.previewPlaceholder.textContent = `Cambio sorgente non riuscito: ${error.message}`;
+  }
+}
+
 function applyModeDisplay() {
-  els.btnModeScreen.classList.add('active');
-  els.btnModeGame.classList.remove('active');
-  if (gameWindowGroup) gameWindowGroup.hidden = true;
-  api.setCaptureMode('display', '');
-  void restartPreviewStream();
+  return applyCaptureMode('display');
 }
 
 function applyModeGame() {
-  els.btnModeGame.classList.add('active');
-  els.btnModeScreen.classList.remove('active');
-  if (gameWindowGroup) gameWindowGroup.hidden = false;
-  const target = selectedWindowTarget();
-  if (!target) {
-    stopPreviewStream();
-    api.getWindows();
-    return;
-  }
-  api.setCaptureMode('window', target);
-  void restartPreviewStream();
+  return applyCaptureMode('window');
 }
 
 els.btnModeScreen.addEventListener('click', applyModeDisplay);
@@ -269,10 +296,7 @@ els.btnModeGame.addEventListener('click', applyModeGame);
 if (els.selectGameWindow) {
   els.selectGameWindow.addEventListener('change', () => {
     if (els.btnModeGame.classList.contains('active')) {
-      const target = selectedWindowTarget();
-      api.setCaptureMode('window', target);
-      if (target) void restartPreviewStream();
-      else stopPreviewStream();
+      void applyModeGame();
     }
   });
 }
@@ -345,7 +369,68 @@ els.btnSave.addEventListener('click', async () => {
 els.btnMinimize?.addEventListener('click', () => api.minimizeWindow());
 els.btnMaximize?.addEventListener('click', () => api.toggleMaximizeWindow());
 els.btnClose?.addEventListener('click', () => api.closeWindow());
-els.btnCheckUpdates?.addEventListener('click', () => api.checkForUpdates());
+function showUpdateDialog(state, details = {}) {
+  els.updateDialogTitle.textContent = 'Aggiornamento ShadowStream';
+  els.updateProgress.hidden = true;
+  els.btnUpdateDownload.hidden = true;
+  els.btnUpdateClose.hidden = false;
+  els.btnUpdateClose.textContent = 'Chiudi';
+  els.btnUpdateDownload.disabled = false;
+
+  switch (state) {
+    case 'checking':
+      els.updateDialogMessage.textContent = 'Ricerca aggiornamenti in corso...';
+      els.btnUpdateClose.textContent = 'Annulla';
+      break;
+    case 'not-available':
+      els.updateDialogMessage.textContent = 'Hai la versione aggiornata.';
+      break;
+    case 'available':
+      els.updateDialogMessage.textContent = `È disponibile la versione ${details.version}.`;
+      els.btnUpdateDownload.hidden = false;
+      els.btnUpdateClose.textContent = 'Più tardi';
+      break;
+    case 'downloading':
+      els.updateDialogMessage.textContent = `Download aggiornamento in corso... ${details.percent ?? 0}%`;
+      els.updateProgress.hidden = false;
+      els.updateProgress.value = details.percent ?? 0;
+      els.btnUpdateClose.hidden = true;
+      break;
+    case 'error':
+      els.updateDialogMessage.textContent = `Controllo aggiornamenti non riuscito: ${details.message || 'errore sconosciuto'}`;
+      break;
+    case 'unsupported':
+      els.updateDialogMessage.textContent = 'Il controllo aggiornamenti è disponibile nella versione installata.';
+      break;
+    default:
+      return;
+  }
+
+  if (!els.updateDialog.open) els.updateDialog.showModal();
+}
+
+els.btnCheckUpdates?.addEventListener('click', () => {
+  if (els.updateDialog.open) return;
+  showUpdateDialog('checking');
+  api.checkForUpdates().catch((error) => showUpdateDialog('error', { message: error.message }));
+});
+els.btnUpdateClose?.addEventListener('click', () => els.updateDialog.close());
+els.btnUpdateDownload?.addEventListener('click', () => {
+  els.btnUpdateDownload.disabled = true;
+  showUpdateDialog('downloading');
+  api.downloadUpdate().catch((error) => showUpdateDialog('error', { message: error.message }));
+});
+api.onUpdateStatus((status) => {
+  if (status.state === 'downloaded') {
+    if (els.updateDialog.open) els.updateDialog.close();
+    return;
+  }
+  if (status.state === 'available' && !els.updateDialog.open) {
+    showUpdateDialog(status.state, status);
+    return;
+  }
+  if (els.updateDialog.open) showUpdateDialog(status.state, status);
+});
 
 // Output open handlers
 const btnOpenOutput = document.querySelector('.content-right .panel:last-child .link-btn');
@@ -403,8 +488,23 @@ function updateAudioSelection() {
     inputDeviceId: inputValue === 'default' || inputValue === 'disabled' ? null : inputValue,
     systemAudioEnabled: outputValue !== 'disabled',
     microphoneEnabled: inputValue !== 'disabled',
+    systemVolume: Number(els.audioOutputVolume.value),
+    microphoneVolume: Number(els.audioMicrophoneVolume.value),
+  }).catch((error) => {
+    console.error('Impossibile aggiornare i dispositivi audio:', error);
   });
   updateMixerDeviceNames();
+}
+
+function updateAudioVolumeControls(settings) {
+  const systemVolume = Number.isFinite(settings?.systemVolume)
+    ? Math.max(0, Math.min(200, settings.systemVolume)) : 100;
+  const microphoneVolume = Number.isFinite(settings?.microphoneVolume)
+    ? Math.max(0, Math.min(200, settings.microphoneVolume)) : 100;
+  els.audioOutputVolume.value = String(systemVolume);
+  els.audioOutputVolumeValue.textContent = `${systemVolume}%`;
+  els.audioMicrophoneVolume.value = String(microphoneVolume);
+  els.audioMicrophoneVolumeValue.textContent = `${microphoneVolume}%`;
 }
 
 function updateMixerDeviceNames() {
@@ -412,7 +512,12 @@ function updateMixerDeviceNames() {
   els.audioMicrophoneName.textContent = els.audioMicrophone.selectedOptions[0]?.textContent || 'Microfono';
 }
 
+api.getAudioSettings()
+  .then(updateAudioVolumeControls)
+  .catch((error) => console.error('Impossibile caricare i livelli volume audio:', error));
+
 api.onAudioDevices((result) => {
+  updateAudioVolumeControls(result.settings);
   setSelectOptions(
     els.audioOutput,
     'Uscita predefinita (automatico)',
@@ -465,6 +570,30 @@ api.onAudioLevels((levels) => {
 
 els.audioOutput.addEventListener('change', updateAudioSelection);
 els.audioMicrophone.addEventListener('change', updateAudioSelection);
+
+let audioVolumeSaveTimeout = null;
+function saveAudioVolumes() {
+  clearTimeout(audioVolumeSaveTimeout);
+  audioVolumeSaveTimeout = setTimeout(() => {
+    api.setAudioVolumes({
+      systemVolume: Number(els.audioOutputVolume.value),
+      microphoneVolume: Number(els.audioMicrophoneVolume.value),
+    }).then((updated) => {
+      if (updated !== true) console.error('OBS non ha applicato i nuovi volumi audio.');
+    }).catch((error) => {
+      console.error('Impossibile aggiornare i volumi audio:', error);
+    });
+  }, 100);
+}
+
+els.audioOutputVolume.addEventListener('input', () => {
+  els.audioOutputVolumeValue.textContent = `${els.audioOutputVolume.value}%`;
+  saveAudioVolumes();
+});
+els.audioMicrophoneVolume.addEventListener('input', () => {
+  els.audioMicrophoneVolumeValue.textContent = `${els.audioMicrophoneVolume.value}%`;
+  saveAudioVolumes();
+});
 
 api.onUpdateStatus((status) => {
   if (!els.btnCheckUpdates) return;

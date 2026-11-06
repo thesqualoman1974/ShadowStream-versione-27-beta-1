@@ -19,7 +19,7 @@
           <nav class="top-nav">
             <span class="nav-item">INSTANT REPLAY</span>
             <span class="nav-item badge">NVENC</span>
-            <span class="nav-item badge secondary" id="version-badge">27 beta 1</span>
+            <span class="nav-item badge secondary" id="version-badge">27 beta 1.1</span>
             <button id="btn-check-updates" class="nav-item update-button" type="button">Aggiorna</button>
           </nav>
         </div>
@@ -35,6 +35,16 @@
           </div>
         </div>
       </header>
+
+      <dialog id="update-dialog" class="update-dialog" aria-labelledby="update-dialog-title">
+        <h2 id="update-dialog-title">Aggiornamento ShadowStream</h2>
+        <p id="update-dialog-message" aria-live="polite">Ricerca aggiornamenti in corso...</p>
+        <progress id="update-progress" max="100" value="0" hidden></progress>
+        <div class="update-dialog-actions">
+          <button id="btn-update-download" class="btn-primary" type="button" hidden>Scarica aggiornamento</button>
+          <button id="btn-update-close" class="btn-secondary" type="button">Annulla</button>
+        </div>
+      </dialog>
 
       <div class="main-layout">
         <!-- Sidebar Navigation -->
@@ -147,6 +157,10 @@
                   </div>
                   <span id="audio-output-name" class="mixer-device">Uscita predefinita</span>
                 </div>
+                <div class="audio-volume-control">
+                  <label for="audio-output-volume">Volume cattura <span id="audio-output-volume-value">100%</span></label>
+                  <input id="audio-output-volume" type="range" min="0" max="200" step="1" value="100" aria-label="Volume cattura audio del PC" />
+                </div>
               </div>
               <div class="mixer-group">
                 <div class="mixer-label-row">
@@ -173,6 +187,10 @@
                     <span class="meter-segment"></span><span class="meter-segment"></span>
                   </div>
                   <span id="audio-mic-name" class="mixer-device">Microfono predefinito</span>
+                </div>
+                <div class="audio-volume-control">
+                  <label for="audio-mic-volume">Volume microfono <span id="audio-mic-volume-value">100%</span></label>
+                  <input id="audio-mic-volume" type="range" min="0" max="200" step="1" value="100" aria-label="Volume cattura microfono" />
                 </div>
               </div>
             </div>
