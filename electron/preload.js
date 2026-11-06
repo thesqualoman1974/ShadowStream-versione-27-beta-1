@@ -44,6 +44,7 @@ const electronAPI = {
   getWebcamDevices: () => ipcRenderer.invoke('live:webcam-devices'),
   setWebcamSettings: (settings) => ipcRenderer.invoke('live:set-webcam-settings', settings),
   selectFfmpeg: () => ipcRenderer.invoke('live:select-ffmpeg'),
+  verifyFfmpeg: () => ipcRenderer.invoke('live:verify-ffmpeg'),
   startLive: () => ipcRenderer.invoke('live:start'),
   stopLive: () => ipcRenderer.invoke('live:stop'),
   getLiveStatus: () => ipcRenderer.invoke('live:get-status'),

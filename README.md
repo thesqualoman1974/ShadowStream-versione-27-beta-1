@@ -1,6 +1,6 @@
 # ShadowStream
 
-ShadowStream 27 beta 2.0 is a Windows screen/game replay buffer and multi-streaming app built with Electron, .NET 8, OBS Studio, and FFmpeg.
+ShadowStream 27 beta 2.1 is a Windows screen/game replay buffer and multi-streaming app built with Electron, .NET 8, OBS Studio, and FFmpeg.
 
 ## Architecture
 
@@ -86,9 +86,9 @@ in this mode. The OBS process runs at above-normal priority.
 The dedicated desktop-audio and microphone sources start without OBS audio
 filters. The microphone source retains the input device's native channel layout.
 
-## Multi-streaming (Beta 2.0)
+## Multi-streaming (Beta 2.1)
 
-Open **Live** to configure Twitch, YouTube, TikTok, and Kick RTMP/RTMPS
+Use the sidebar's **Simulcast** view to configure Twitch, YouTube, TikTok, and Kick RTMP/RTMPS
 destinations. Stream URLs and keys are entered from each platform's dashboard;
 keys are encrypted with Windows `safeStorage` before they are saved. The app
 does not embed OAuth client secrets. YouTube supports desktop OAuth with PKCE:
@@ -109,11 +109,14 @@ The YouTube flow follows Google's
 and uses the
 [YouTube Live Streams API](https://developers.google.com/youtube/v3/live/docs/liveStreams/list).
 
-The local relay requires an installed FFmpeg executable. Select `ffmpeg.exe` in
-the Live view; it is intentionally not bundled with the installer. OBS sends
-one encoded stream to the loopback relay, which copies it to each selected
-landscape destination without another encode. The displayed bitrate is the OBS
-source bitrate shared by the relay, not an independent measurement for each platform.
+The local relay requires an installed FFmpeg executable. Select `ffmpeg.exe` at
+the top of the Simulcast view; ShadowStream verifies it and keeps live-start
+disabled until a working file is configured. If FFmpeg is installed from an
+archive, select `bin\ffmpeg.exe` inside its extracted folder. It is intentionally
+not bundled with the installer. OBS sends one encoded stream to the loopback
+relay, which copies it to each selected landscape destination without another
+encode. The displayed bitrate is the OBS source bitrate shared by the relay,
+not an independent measurement for each platform.
 Use **AVVIA TUTTE LE DIRETTE** to start all saved destinations and **Ferma
 dirette** to stop OBS and the relay together. Configure the webcam overlay from
 the same Live page; its placement applies to the shared OBS scene, so keep it in

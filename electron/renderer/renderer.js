@@ -714,12 +714,14 @@ api.onUpdateStatus((status) => {
 });
 
 function selectView(view) {
+  const dashboardVisible = view === 'dashboard';
   const settingsVisible = view === 'settings';
   const liveVisible = view === 'live';
+  els.content.classList.toggle('show-dashboard', dashboardVisible);
   els.content.classList.toggle('show-settings', settingsVisible);
   els.content.classList.toggle('show-live', liveVisible);
   for (const [button, selected] of [
-    [els.navDashboard, view === 'dashboard'],
+    [els.navDashboard, dashboardVisible],
     [els.navLive, liveVisible],
     [els.navSettings, settingsVisible],
   ]) {
@@ -734,6 +736,7 @@ els.navDashboard.addEventListener('click', () => selectView('dashboard'));
 els.navLive.addEventListener('click', () => selectView('live'));
 els.navSettings.addEventListener('click', () => selectView('settings'));
 els.navClips.addEventListener('click', () => api.openClips());
+selectView('dashboard');
 
 const LIVE_PLATFORMS = [
   { id: 'twitch', name: 'Twitch' },
@@ -745,6 +748,7 @@ let liveState = 'offline';
 let liveStatusTimer = null;
 let webcamDevicesLoaded = false;
 let savedWebcamDeviceId = null;
+let ffmpegConfigured = false;
 
 function platformElements(platform) {
   return {
@@ -785,7 +789,7 @@ function setLiveState(status) {
   };
   els.liveState.textContent = labels[liveState] || labels.error;
   els.liveState.classList.toggle('is-error', liveState === 'error');
-  els.liveStart.disabled = active;
+  els.liveStart.disabled = active || !ffmpegConfigured;
   els.liveStop.disabled = liveState !== 'live' && liveState !== 'stopping';
   els.liveMessage.textContent = status.message || '';
 
@@ -842,9 +846,22 @@ async function loadLiveSettings() {
     item.key.placeholder = saved?.configured ? 'Salvata e protetta da Windows' : '';
     item.status.textContent = saved?.configured ? 'CONFIGURATO' : 'OFFLINE';
   }
-  els.liveFfmpegPath.textContent = settings.ffmpegPath
-    ? `FFmpeg selezionato: ${settings.ffmpegPath}`
-    : 'FFmpeg richiesto, non incluso nell’installer. Seleziona un ffmpeg.exe già installato.';
+  ffmpegConfigured = false;
+  els.liveStart.disabled = true;
+  els.liveSelectFfmpeg.textContent = settings.ffmpegPath ? 'Cambia ffmpeg.exe' : 'Seleziona ffmpeg.exe';
+  if (settings.ffmpegPath) {
+    try {
+      const verifiedPath = await api.verifyFfmpeg();
+      ffmpegConfigured = Boolean(verifiedPath);
+      els.liveFfmpegPath.textContent = `FFmpeg verificato: ${verifiedPath}`;
+    } catch (error) {
+      console.error('Verifica FFmpeg non riuscita:', error);
+      els.liveFfmpegPath.textContent = `${error.message} Seleziona un ffmpeg.exe valido per continuare.`;
+    }
+  } else {
+    els.liveFfmpegPath.textContent = 'FFmpeg richiesto, non incluso nell’installer. Seleziona un ffmpeg.exe per abilitare l’avvio delle dirette.';
+  }
+  els.liveStart.disabled = liveState === 'live' || liveState === 'starting' || liveState === 'stopping' || !ffmpegConfigured;
   els.tiktokCrop.value = String(Math.round((settings.verticalCropX ?? 0.5) * 100));
   els.tiktokCropValue.value = `${els.tiktokCrop.value}%`;
   els.youtubeClientId.value = settings.youtubeClientId || '';
@@ -912,8 +929,11 @@ els.liveSelectFfmpeg.addEventListener('click', async () => {
   try {
     const selected = await api.selectFfmpeg();
     if (selected) {
+      ffmpegConfigured = true;
       els.liveFfmpegPath.textContent = `FFmpeg selezionato: ${selected}`;
-      els.liveMessage.textContent = '';
+      els.liveSelectFfmpeg.textContent = 'Cambia ffmpeg.exe';
+      els.liveStart.disabled = liveState === 'live' || liveState === 'starting' || liveState === 'stopping';
+      els.liveMessage.textContent = 'FFmpeg verificato: il relay è pronto.';
     }
   } catch (error) {
     console.error('Selezione FFmpeg non riuscita:', error);

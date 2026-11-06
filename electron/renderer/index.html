@@ -19,7 +19,7 @@
           <nav class="top-nav">
             <span class="nav-item">INSTANT REPLAY</span>
             <span class="nav-item badge">NVENC</span>
-            <span class="nav-item badge secondary" id="version-badge">27 beta 2.0</span>
+            <span class="nav-item badge secondary" id="version-badge">27 beta 2.1</span>
             <button id="btn-check-updates" class="nav-item update-button" type="button">Aggiorna</button>
           </nav>
         </div>
@@ -49,14 +49,23 @@
       <div class="main-layout">
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
-          <button class="side-btn active" id="nav-dashboard" type="button" aria-label="Dashboard" title="Dashboard" aria-current="page">▶</button>
-          <button class="side-btn" id="nav-live" type="button" aria-label="Multi-streaming" title="Live">●</button>
-          <button class="side-btn" id="nav-clips" type="button" aria-label="Apri cartella clip" title="Clip">📁</button>
-          <button class="side-btn" id="nav-settings" type="button" aria-label="Impostazioni" title="Impostazioni">⚙</button>
+          <button class="side-btn active" id="nav-dashboard" type="button" aria-label="Home" title="Home" aria-current="page">
+            <span class="side-icon" aria-hidden="true">⌂</span><span class="side-label">Home</span>
+          </button>
+          <button class="side-btn" id="nav-live" type="button" aria-label="Simulcast" title="Simulcast">
+            <span class="side-icon" aria-hidden="true">◉</span><span class="side-label">Simulcast</span>
+          </button>
+          <button class="side-btn" id="nav-clips" type="button" aria-label="Apri cartella clip" title="Clip">
+            <span class="side-icon" aria-hidden="true">▤</span><span class="side-label">Clip</span>
+          </button>
+          <button class="side-btn" id="nav-settings" type="button" aria-label="Impostazioni" title="Impostazioni">
+            <span class="side-icon" aria-hidden="true">⚙</span><span class="side-label">Impostazioni</span>
+          </button>
         </aside>
 
         <!-- Content Area -->
-        <main class="content">
+        <main class="content show-dashboard">
+          <section id="dashboard-view" class="dashboard-view" aria-label="Home">
           <div class="preview-area">
             <div class="preview-box">
               <video id="preview-video" aria-label="Anteprima cattura schermo" autoplay muted playsinline hidden></video>
@@ -87,27 +96,8 @@
           </div>
           <div class="content-left">
             <section class="hero-section">
-              <span class="section-tag">NVIDIA-STYLE INSTANT REPLAY</span>
-              <h2 class="section-title">Ultimi <span id="display-buffer-min">5</span> minuti, sempre pronti</h2>
-
-              <div class="stats-grid">
-                <div class="stat-card">
-                  <span class="stat-label">CATTURA</span>
-                  <span class="stat-value">60 FPS</span>
-                </div>
-                <div class="stat-card">
-                  <span class="stat-label">ENCODER</span>
-                  <span class="stat-value">NVENC</span>
-                </div>
-                <div class="stat-card">
-                  <span class="stat-label">HOTKEY</span>
-                  <span class="stat-value">F9</span>
-                </div>
-                <div class="stat-card">
-                  <span class="stat-label">FORMATO</span>
-                  <span class="stat-value">MP4</span>
-                </div>
-              </div>
+              <span class="section-tag">INSTANT REPLAY</span>
+              <h2 class="section-title">Buffer: <span id="display-buffer-min">5</span> minuti</h2>
 
               <div class="buffer-control-row">
                 <div class="circular-progress-container">
@@ -123,7 +113,7 @@
                 </div>
               </div>
 
-              <p class="hotkey-hint">In game premi <span class="key">F9</span> — overlay NVIDIA, senza lasciare la partita.</p>
+              <p class="hotkey-hint">Regola la durata del buffer da Impostazioni; usa “Salva clip” per esportare il replay.</p>
             </section>
           </div>
 
@@ -224,6 +214,7 @@
               </div>
             </div>
           </aside>
+          </section>
 
           <section id="settings-view" class="settings-view" aria-labelledby="settings-title">
             <header class="settings-header">
@@ -301,13 +292,25 @@
               <p>Configura gli endpoint RTMP delle piattaforme e avvia una sola diretta. Le chiavi sono protette con la cifratura di Windows.</p>
             </header>
 
+            <section class="panel live-ffmpeg-card" aria-labelledby="live-ffmpeg-title">
+              <div class="live-ffmpeg-heading">
+                <div>
+                  <span class="section-tag">PRIMA DI ANDARE IN DIRETTA</span>
+                  <h2 id="live-ffmpeg-title">Configura FFmpeg</h2>
+                </div>
+                <button id="btn-select-ffmpeg" class="btn-secondary" type="button">Seleziona ffmpeg.exe</button>
+              </div>
+              <p id="live-ffmpeg-path" class="settings-help" role="status" aria-live="polite">FFmpeg è necessario per il relay e non è incluso nell’installer. Seleziona il file ffmpeg.exe per abilitare l’avvio delle dirette.</p>
+              <p class="live-ffmpeg-hint">Se hai scaricato FFmpeg, scegli <code>bin\ffmpeg.exe</code> nella cartella estratta.</p>
+            </section>
+
             <div class="live-toolbar panel">
               <div class="live-status-row">
                 <strong id="live-state" role="status" aria-live="polite">Offline</strong>
                 <span>Bitrate sorgente OBS: <strong id="live-bitrate">—</strong></span>
               </div>
               <div class="live-actions">
-                <button id="btn-live-start" class="btn-primary" type="button">AVVIA TUTTE LE DIRETTE</button>
+                <button id="btn-live-start" class="btn-primary" type="button" disabled>AVVIA TUTTE LE DIRETTE</button>
                 <button id="btn-live-stop" class="btn-secondary" type="button" disabled>Ferma dirette</button>
               </div>
               <p id="live-message" class="settings-help" role="status" aria-live="polite"></p>
@@ -438,13 +441,6 @@
               <button id="btn-webcam-apply" class="btn-primary" type="button">Applica overlay webcam</button>
             </section>
 
-            <section class="panel live-ffmpeg-card">
-              <div class="panel-header">
-                <h2>RELAY LOCALE</h2>
-                <button id="btn-select-ffmpeg" class="link-btn" type="button">Seleziona ffmpeg.exe</button>
-              </div>
-              <p id="live-ffmpeg-path" class="settings-help">FFmpeg richiesto, non incluso nell’installer. Il relay copia il flusso codificato da OBS verso le destinazioni selezionate.</p>
-            </section>
             <p class="settings-help live-oauth-note">YouTube supporta il collegamento desktop OAuth con PKCE e l’importazione di uno stream già creato. Twitch, TikTok e Kick restano configurabili con server e chiave RTMP manuali.</p>
           </section>
         </main>

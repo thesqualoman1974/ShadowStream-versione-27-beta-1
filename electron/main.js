@@ -1178,6 +1178,13 @@ ipcMain.handle('live:select-ffmpeg', async (event) => {
   await verifyFfmpeg(ffmpegPath);
   return getDestinationStore().saveFfmpegPath(ffmpegPath);
 });
+ipcMain.handle('live:verify-ffmpeg', async (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
+  const ffmpegPath = getDestinationStore().getFfmpegPath();
+  if (!ffmpegPath) throw new Error('Seleziona ffmpeg.exe per configurare il relay.');
+  await verifyFfmpeg(ffmpegPath);
+  return ffmpegPath;
+});
 ipcMain.handle('live:start', (event) => {
   if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
   return requestLiveStart();
