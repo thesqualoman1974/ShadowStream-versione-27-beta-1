@@ -156,6 +156,8 @@ let previewRequestId = 0;
 const zoomSettings = { zoom: 1, centerX: 0.5, centerY: 0.5 };
 let zoomSaveTimeout = null;
 let panPointer = null;
+let updateRequired = false;
+let updateReadyToInstall = false;
 
 function renderZoom() {
   const { zoom, centerX, centerY } = zoomSettings;
@@ -376,6 +378,7 @@ function showUpdateDialog(state, details = {}) {
   els.btnUpdateClose.hidden = false;
   els.btnUpdateClose.textContent = 'Chiudi';
   els.btnUpdateDownload.disabled = false;
+  if (details.mandatory) updateRequired = true;
 
   switch (state) {
     case 'checking':
@@ -386,18 +389,41 @@ function showUpdateDialog(state, details = {}) {
       els.updateDialogMessage.textContent = 'Hai la versione aggiornata.';
       break;
     case 'available':
-      els.updateDialogMessage.textContent = `È disponibile la versione ${details.version}.`;
-      els.btnUpdateDownload.hidden = false;
-      els.btnUpdateClose.textContent = 'Più tardi';
+      els.updateDialogMessage.textContent = updateRequired
+        ? `Aggiornamento obbligatorio alla versione ${details.version}. Download in corso...`
+        : `È disponibile la versione ${details.version}.`;
+      if (updateRequired) {
+        els.updateProgress.hidden = false;
+        els.btnUpdateClose.hidden = true;
+      } else {
+        els.btnUpdateDownload.hidden = false;
+        els.btnUpdateClose.textContent = 'Più tardi';
+      }
       break;
     case 'downloading':
-      els.updateDialogMessage.textContent = `Download aggiornamento in corso... ${details.percent ?? 0}%`;
+      els.updateDialogMessage.textContent = updateRequired
+        ? `Download obbligatorio in corso... ${details.percent ?? 0}%`
+        : `Download aggiornamento in corso... ${details.percent ?? 0}%`;
       els.updateProgress.hidden = false;
       els.updateProgress.value = details.percent ?? 0;
-      els.btnUpdateClose.hidden = true;
+      els.btnUpdateClose.hidden = updateRequired;
+      if (updateRequired) els.btnUpdateDownload.hidden = true;
+      break;
+    case 'downloaded':
+      updateReadyToInstall = true;
+      els.updateDialogMessage.textContent = 'Aggiornamento obbligatorio scaricato. Riavvia per installarlo.';
+      els.btnUpdateDownload.textContent = 'Installa e riavvia';
+      els.btnUpdateDownload.hidden = false;
+      els.btnUpdateClose.hidden = updateRequired;
       break;
     case 'error':
       els.updateDialogMessage.textContent = `Controllo aggiornamenti non riuscito: ${details.message || 'errore sconosciuto'}`;
+      if (updateRequired) {
+        els.updateDialogMessage.textContent = `Aggiornamento obbligatorio non riuscito: ${details.message || 'errore sconosciuto'}`;
+        els.btnUpdateDownload.textContent = 'Riprova';
+        els.btnUpdateDownload.hidden = false;
+        els.btnUpdateClose.hidden = true;
+      }
       break;
     case 'unsupported':
       els.updateDialogMessage.textContent = 'Il controllo aggiornamenti è disponibile nella versione installata.';
@@ -415,21 +441,34 @@ els.btnCheckUpdates?.addEventListener('click', () => {
   api.checkForUpdates().catch((error) => showUpdateDialog('error', { message: error.message }));
 });
 els.btnUpdateClose?.addEventListener('click', () => els.updateDialog.close());
+els.updateDialog?.addEventListener('cancel', (event) => {
+  if (updateRequired) event.preventDefault();
+});
 els.btnUpdateDownload?.addEventListener('click', () => {
   els.btnUpdateDownload.disabled = true;
-  showUpdateDialog('downloading');
-  api.downloadUpdate().catch((error) => showUpdateDialog('error', { message: error.message }));
+  if (updateReadyToInstall) {
+    api.installUpdate().catch((error) => showUpdateDialog('error', {
+      message: error.message,
+      mandatory: updateRequired,
+    }));
+    return;
+  }
+  showUpdateDialog('downloading', { mandatory: updateRequired });
+  api.downloadUpdate().catch((error) => showUpdateDialog('error', {
+    message: error.message,
+    mandatory: updateRequired,
+  }));
 });
 api.onUpdateStatus((status) => {
   if (status.state === 'downloaded') {
-    if (els.updateDialog.open) els.updateDialog.close();
-    return;
-  }
-  if (status.state === 'available' && !els.updateDialog.open) {
     showUpdateDialog(status.state, status);
     return;
   }
-  if (els.updateDialog.open) showUpdateDialog(status.state, status);
+  if (status.state === 'available') updateRequired = status.mandatory === true;
+  if (status.state === 'error' && status.mandatory) updateRequired = true;
+  if (status.state === 'available' || status.state === 'error' || els.updateDialog.open) {
+    showUpdateDialog(status.state, status);
+  }
 });
 
 // Output open handlers

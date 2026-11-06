@@ -56,6 +56,9 @@ let captureMode = 'display'; // 'display' | 'window'
 let captureWindowTitle = '';
 let captureWindowTarget = null;
 let updateCheckPromise = null;
+let updateDownloadPromise = null;
+let updateDownloaded = false;
+let mandatoryUpdateVersion = null;
 let audioSettingsQueue = Promise.resolve();
 let audioSettings = {
   outputDeviceId: null,
@@ -611,32 +614,30 @@ function configureUpdater() {
     send('update:status', { state: 'checking' });
   });
   autoUpdater.on('update-not-available', () => {
+    mandatoryUpdateVersion = null;
     log('update', 'ShadowStream è aggiornato.');
     send('update:status', { state: 'not-available' });
   });
   autoUpdater.on('error', (error) => {
     log('error', `Aggiornamento non riuscito: ${error.message}`);
-    send('update:status', { state: 'error', message: error.message });
+    send('update:status', {
+      state: 'error',
+      message: error.message,
+      mandatory: mandatoryUpdateVersion !== null,
+    });
   });
   autoUpdater.on('download-progress', (progress) => {
     send('update:status', { state: 'downloading', percent: Math.round(progress.percent) });
   });
   autoUpdater.on('update-available', (info) => {
+    mandatoryUpdateVersion = info.version;
     log('update', `Disponibile la versione ${info.version}.`);
-    send('update:status', { state: 'available', version: info.version });
+    send('update:status', { state: 'available', version: info.version, mandatory: true });
+    void downloadUpdate();
   });
-  autoUpdater.on('update-downloaded', async (info) => {
+  autoUpdater.on('update-downloaded', (info) => {
+    updateDownloaded = true;
     send('update:status', { state: 'downloaded', version: info.version });
-    const result = await dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      buttons: ['Installa e riavvia', 'Più tardi'],
-      defaultId: 0,
-      cancelId: 1,
-      title: 'Aggiornamento pronto',
-      message: `La versione ${info.version} è stata scaricata.`,
-      detail: 'L’installazione chiuderà ShadowStream e lo riavvierà.',
-    });
-    if (result.response === 0) installDownloadedUpdate();
   });
 }
 
@@ -670,14 +671,24 @@ function checkForUpdates() {
 
 function downloadUpdate() {
   if (!app.isPackaged) return Promise.resolve(false);
+  if (updateDownloadPromise) return updateDownloadPromise;
+  updateDownloaded = false;
   send('update:status', { state: 'downloading', percent: 0 });
-  return autoUpdater.downloadUpdate()
+  updateDownloadPromise = autoUpdater.downloadUpdate()
     .then(() => true)
     .catch((error) => {
       log('error', `Download aggiornamento non riuscito: ${error.message}`);
-      send('update:status', { state: 'error', message: error.message });
+      send('update:status', {
+        state: 'error',
+        message: error.message,
+        mandatory: mandatoryUpdateVersion !== null,
+      });
       return false;
+    })
+    .finally(() => {
+      updateDownloadPromise = null;
     });
+  return updateDownloadPromise;
 }
 
 function requestReplayStart(opts) {
@@ -761,6 +772,14 @@ ipcMain.handle('backend:get-zoom-settings', () => ({ ...zoomSettings }));
 ipcMain.handle('capture:preview-source', getPreviewSource);
 ipcMain.handle('updates:check', checkForUpdates);
 ipcMain.handle('updates:download', downloadUpdate);
+ipcMain.handle('updates:install', () => {
+  if (!updateDownloaded) {
+    log('error', 'Installazione rifiutata: l’aggiornamento non è stato scaricato.');
+    return false;
+  }
+  void installDownloadedUpdate();
+  return true;
+});
 ipcMain.handle('backend:get-audio-settings', () => audioSettings);
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:toggle-maximize', () => {

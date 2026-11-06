@@ -33,6 +33,7 @@ const electronAPI = {
   getPreviewSource: () => ipcRenderer.invoke('capture:preview-source'),
   checkForUpdates: () => ipcRenderer.invoke('updates:check'),
   downloadUpdate: () => ipcRenderer.invoke('updates:download'),
+  installUpdate: () => ipcRenderer.invoke('updates:install'),
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
   toggleMaximizeWindow: () => ipcRenderer.invoke('window:toggle-maximize'),
   closeWindow: () => ipcRenderer.invoke('window:close'),
