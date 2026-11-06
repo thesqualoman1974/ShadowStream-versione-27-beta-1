@@ -61,6 +61,7 @@ let updateDownloadPromise = null;
 let updateDownloaded = false;
 let mandatoryUpdateVersion = null;
 let audioSettingsQueue = Promise.resolve();
+const pendingBackendCommands = [];
 let audioSettings = {
   outputDeviceId: null,
   inputDeviceId: null,
@@ -364,7 +365,9 @@ function startBackend() {
   backend.on('spawn', () => {
     log('system', `Backend avviato (pid ${backend.pid}).`);
     emitStatus();
-    sendCommand('AUDIODEVICES');
+    const pendingCommands = pendingBackendCommands.splice(0);
+    for (const command of pendingCommands) sendCommand(command);
+    if (!pendingCommands.includes('AUDIODEVICES')) sendCommand('AUDIODEVICES');
   });
 
   backend.on('error', (err) => {
@@ -449,7 +452,15 @@ async function configureObsEngine() {
 }
 
 function sendCommand(cmd) {
-  if (quitting || !isBackendRunning() || !backend.stdin || !backend.stdin.writable) {
+  if (quitting) {
+    log('error', 'Backend non attivo: impossibile inviare il comando.');
+    return false;
+  }
+  if (!isBackendRunning() || !backend.stdin || !backend.stdin.writable) {
+    if (cmd === 'W' || cmd === 'AUDIODEVICES') {
+      if (!pendingBackendCommands.includes(cmd)) pendingBackendCommands.push(cmd);
+      return true;
+    }
     log('error', 'Backend non attivo: impossibile inviare il comando.');
     return false;
   }
@@ -518,6 +529,7 @@ function stopBackend() {
 async function stopServices() {
   quitting = true;
   pendingReplayStart = false;
+  pendingBackendCommands.length = 0;
   if (obsEngine?.running) await obsEngine.stop();
   await stopBackend();
 }

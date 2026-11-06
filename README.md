@@ -1,6 +1,6 @@
 # ShadowStream
 
-ShadowStream 27 beta 1.4 is a Windows screen/game replay buffer built with Electron, .NET 8, and OBS Studio.
+ShadowStream 27 beta 1.5 is a Windows screen/game replay buffer built with Electron, .NET 8, and OBS Studio.
 
 ## Architecture
 

@@ -254,14 +254,14 @@ function selectedWindowTarget() {
 
 let captureModeRequestId = 0;
 
-async function applyCaptureMode(mode) {
+async function applyCaptureMode(mode, targetOverride = null) {
   const requestId = ++captureModeRequestId;
   const useWindow = mode === 'window';
   els.btnModeGame.classList.toggle('active', useWindow);
   els.btnModeScreen.classList.toggle('active', !useWindow);
   if (gameWindowGroup) gameWindowGroup.hidden = !useWindow;
 
-  const target = useWindow ? selectedWindowTarget() : null;
+  const target = useWindow ? targetOverride || selectedWindowTarget() || preferredWindowTarget : null;
   if (useWindow && !target) {
     stopPreviewStream();
     api.getWindows().catch((error) => console.error('Impossibile aggiornare le finestre:', error));
@@ -719,7 +719,8 @@ api.getCaptureSettings()
       els.btnModeScreen.classList.remove('active');
       els.btnModeGame.classList.add('active');
       if (gameWindowGroup) gameWindowGroup.hidden = false;
-      api.getWindows();
+      void applyCaptureMode('window', settings.windowTarget);
+      api.getWindows().catch((error) => console.error('Impossibile caricare le finestre all’avvio:', error));
       return;
     }
     applyModeDisplay();
@@ -772,21 +773,17 @@ async function restartPreviewStream() {
   stopPreviewStream();
   const requestId = previewRequestId;
   if (!els.preview || !els.previewPlaceholder) return;
-  const retryDelays = [0, 300, 800, 1500];
   let lastError = null;
+  let attempt = 0;
 
-  for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
-    if (requestId !== previewRequestId) return;
-    if (retryDelays[attempt] > 0) {
-      els.previewPlaceholder.textContent = `Attendo la sorgente video... (${attempt + 1}/${retryDelays.length})`;
-      await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
-      if (requestId !== previewRequestId) return;
-    } else {
-      els.previewPlaceholder.textContent = 'Avvio anteprima live...';
-    }
-
+  while (requestId === previewRequestId) {
     let stream = null;
     try {
+      if (attempt > 0) {
+        els.previewPlaceholder.textContent = `Anteprima in attesa; nuovo tentativo ${attempt}...`;
+      } else {
+        els.previewPlaceholder.textContent = 'Avvio anteprima live...';
+      }
       const source = await api.getPreviewSource();
       if (requestId !== previewRequestId) return;
 
@@ -818,6 +815,11 @@ async function restartPreviewStream() {
       els.preview.srcObject = stream;
       els.preview.hidden = false;
       await els.preview.play();
+      await waitForPreviewFrame(els.preview, 5000);
+      if (requestId !== previewRequestId) {
+        for (const track of stream.getTracks()) track.stop();
+        return;
+      }
       els.previewPlaceholder.hidden = true;
       return;
     } catch (error) {
@@ -832,11 +834,50 @@ async function restartPreviewStream() {
       els.preview.srcObject = null;
       els.preview.hidden = true;
     }
+    attempt += 1;
+    if (attempt === 1 || attempt % 5 === 0) {
+      console.warn(`Anteprima non pronta (tentativo ${attempt}); riprovo: ${lastError.message}`);
+    }
+    const retryDelay = Math.min(500 * (2 ** Math.min(attempt - 1, 5)), 10000);
+    await new Promise((resolve) => setTimeout(resolve, retryDelay));
+  }
+}
+
+function waitForPreviewFrame(video, timeoutMs) {
+  if (video.videoWidth > 0 && video.videoHeight > 0 && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    return Promise.resolve();
   }
 
-  if (requestId !== previewRequestId) return;
-  stopPreviewStream();
-  els.previewPlaceholder.textContent = `Anteprima non disponibile: ${lastError?.message || 'sorgente video non pronta'}`;
+  return new Promise((resolve, reject) => {
+    let frameCallbackId = null;
+    const timeout = setTimeout(() => finish(new Error('La sorgente video non ha prodotto fotogrammi.')), timeoutMs);
+    const cleanup = () => {
+      clearTimeout(timeout);
+      video.removeEventListener('loadeddata', check);
+      video.removeEventListener('playing', check);
+      if (frameCallbackId !== null && typeof video.cancelVideoFrameCallback === 'function') {
+        video.cancelVideoFrameCallback(frameCallbackId);
+      }
+    };
+    const finish = (error) => {
+      cleanup();
+      if (error) reject(error);
+      else resolve();
+    };
+    const check = () => {
+      if (video.videoWidth <= 0 || video.videoHeight <= 0
+        || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+        || frameCallbackId !== null) return;
+      if (typeof video.requestVideoFrameCallback !== 'function') {
+        finish();
+        return;
+      }
+      frameCallbackId = video.requestVideoFrameCallback(() => finish());
+    };
+    video.addEventListener('loadeddata', check);
+    video.addEventListener('playing', check);
+    check();
+  });
 }
 
 function syncCaptureStatus(status) {
