@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <RootNamespace>ShadowStream</RootNamespace>
     <AssemblyName>ShadowStream</AssemblyName>
-    <Version>27.0.0-beta.2.1</Version>
+    <Version>27.0.0-beta.2.2</Version>
     <LangVersion>latest</LangVersion>
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>

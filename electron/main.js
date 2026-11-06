@@ -1126,6 +1126,7 @@ ipcMain.handle('live:save-destinations', (event, destinations) => {
   if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
   return getDestinationStore().saveDestinations(destinations);
 });
+ipcMain.removeHandler('live:set-vertical-crop');
 ipcMain.handle('live:set-vertical-crop', (event, value) => {
   if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
   return getDestinationStore().saveVerticalCropX(value);
