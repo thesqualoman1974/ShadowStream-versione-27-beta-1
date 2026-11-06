@@ -26,10 +26,6 @@ for (const output of [process.stdout, process.stderr]) {
   output.on('error', (error) => {
     if (error.code !== 'EPIPE') setImmediate(() => { throw error; });
   });
-  ipcMain.handle('live:set-vertical-crop', (event, value) => {
-    if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
-    return getDestinationStore().saveVerticalCropX(value);
-  });
 }
 
 const ROOT = path.join(__dirname, '..');
@@ -1129,6 +1125,10 @@ ipcMain.handle('live:get-settings', (event) => {
 ipcMain.handle('live:save-destinations', (event, destinations) => {
   if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
   return getDestinationStore().saveDestinations(destinations);
+});
+ipcMain.handle('live:set-vertical-crop', (event, value) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta Live non autorizzata.');
+  return getDestinationStore().saveVerticalCropX(value);
 });
 ipcMain.handle('live:youtube-connect', (event, clientId) => {
   if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta OAuth non autorizzata.');
