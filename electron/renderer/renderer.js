@@ -736,6 +736,58 @@ els.navDashboard.addEventListener('click', () => selectView('dashboard'));
 els.navLive.addEventListener('click', () => selectView('live'));
 els.navSettings.addEventListener('click', () => selectView('settings'));
 els.navClips.addEventListener('click', () => api.openClips());
+
+const securityScanStatus = document.getElementById('security-scan-status');
+const securityScanButton = document.getElementById('btn-security-scan');
+const securityTestButton = document.getElementById('btn-security-test');
+
+function renderSecurityStatus(status) {
+  const messages = {
+    idle: 'In attesa della scansione',
+    scanning: 'Scansione FiveM in corso…',
+    unavailable: 'Cartella FiveM non trovata; scansione non eseguita.',
+    complete: status.suspicious
+      ? 'Rilevamento sospetto nella cartella FiveM; verifica manuale consigliata.'
+      : 'Scansione completata: nessun elemento sospetto rilevato.',
+    'test-complete': 'Test locale completato: nessun file letto, dato inviato o ban eseguito.',
+    error: `Scansione non riuscita: ${status.message || 'errore non specificato.'}`,
+  };
+  securityScanStatus.textContent = messages[status.state] || 'Stato scansione non disponibile.';
+  if (status.checkedAt) {
+    const checkedAt = new Date(status.checkedAt);
+    if (!Number.isNaN(checkedAt.getTime())) {
+      securityScanStatus.textContent += ` Ultimo controllo: ${checkedAt.toLocaleString()}.`;
+    }
+  }
+}
+
+api.onSecurityStatus(renderSecurityStatus);
+api.getSecurityStatus().then(renderSecurityStatus).catch((error) => {
+  console.error('Impossibile recuperare lo stato della scansione:', error);
+  renderSecurityStatus({ state: 'error', message: error.message });
+});
+
+securityScanButton.addEventListener('click', async () => {
+  securityScanButton.disabled = true;
+  try {
+    renderSecurityStatus(await api.scanSecurityNow());
+  } catch (error) {
+    console.error('Scansione locale non riuscita:', error);
+    renderSecurityStatus({ state: 'error', message: error.message });
+  } finally {
+    securityScanButton.disabled = false;
+  }
+});
+
+securityTestButton.addEventListener('click', async () => {
+  try {
+    renderSecurityStatus(await api.testSecurityScan());
+  } catch (error) {
+    console.error('Test scanner non riuscito:', error);
+    renderSecurityStatus({ state: 'error', message: error.message });
+  }
+});
+
 selectView('dashboard');
 
 const LIVE_PLATFORMS = [

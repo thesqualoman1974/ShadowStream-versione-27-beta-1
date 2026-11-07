@@ -1,6 +1,6 @@
 # ShadowStream
 
-ShadowStream 27 beta 2.1 is a Windows screen/game replay buffer and multi-streaming app built with Electron, .NET 8, OBS Studio, and FFmpeg.
+ShadowStream 27 beta 1 is a Windows screen/game replay buffer and multi-streaming app built with Electron, .NET 8, OBS Studio, and FFmpeg.
 
 ## Architecture
 
@@ -28,6 +28,8 @@ Install Node.js 22+, the .NET 8 SDK, and OBS Studio 33 or later. Then run:
 npm install
 npm start
 ```
+
+`npm start` avvia ShadowStream senza una finestra Node/console. Per la diagnostica, usa `npm run start:console`.
 
 For troubleshooting with the Electron Developer Tools Console open, run:
 
@@ -85,6 +87,20 @@ meters and Windows device enumeration; its FFmpeg capture commands are disabled
 in this mode. The OBS process runs at above-normal priority.
 The dedicated desktop-audio and microphone sources start without OBS audio
 filters. The microphone source retains the input device's native channel layout.
+
+## Local FiveM scan
+
+On startup ShadowStream checks only the top level of the FiveM installation
+folder for the existing filename heuristics (`.asi`, `cheat`, and `modmenu`).
+The scan runs locally, repeats every 30 minutes, and can be started manually in
+Settings. It does not read file contents, send scan results or identifiers to a
+server, or apply bans. The Settings test and
+`window.electronAPI.testSecurityScan()` in DevTools only verify the local test
+path; they do not contact the Discord bot.
+
+By default the scan folder is `%LOCALAPPDATA%\FiveM\FiveM.app`. Set
+`SHADOWSTREAM_GAME_DIR` to override it, or set
+`SHADOWSTREAM_SCAN_INTERVAL_MS` to change the repeat interval (minimum 1000 ms).
 
 ## Multi-streaming (Beta 2.1)
 

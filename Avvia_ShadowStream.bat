@@ -1,3 +1,2 @@
 @echo off
-cd /d "D:\ShadowStream"
-start "" "node_modules\electron\dist\electron.exe" .
+wscript.exe //B //Nologo "%~dp0start-hidden.vbs"

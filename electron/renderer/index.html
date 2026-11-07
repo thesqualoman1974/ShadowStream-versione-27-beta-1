@@ -19,7 +19,7 @@
           <nav class="top-nav">
             <span class="nav-item">INSTANT REPLAY</span>
             <span class="nav-item badge">NVENC</span>
-            <span class="nav-item badge secondary" id="version-badge">27 beta 2.1</span>
+            <span class="nav-item badge secondary" id="version-badge">27 beta 1</span>
             <button id="btn-check-updates" class="nav-item update-button" type="button">Aggiorna</button>
           </nav>
         </div>
@@ -283,6 +283,19 @@
                 <p class="settings-help">I meter del segnale restano visibili nel dashboard.</p>
               </section>
             </div>
+
+            <section class="panel settings-card security-scan-card" aria-labelledby="security-scan-title">
+              <div class="panel-header">
+                <h2 id="security-scan-title">SCANSIONE LOCALE FIVEM</h2>
+                <span id="security-scan-status" role="status" aria-live="polite">In attesa della scansione</span>
+              </div>
+              <p class="settings-help">Controlla solo gli elementi nella cartella FiveM. I risultati restano sul PC: nessun dato viene inviato e non viene applicato alcun ban.</p>
+              <div class="security-scan-actions">
+                <button id="btn-security-scan" class="btn-secondary" type="button">Scansiona ora</button>
+                <button id="btn-security-test" class="btn-secondary" type="button">Test locale (nessun ban)</button>
+              </div>
+              <p class="settings-help">Da DevTools: <code>window.electronAPI.testSecurityScan()</code> esegue un test locale senza leggere file o contattare il bot.</p>
+            </section>
           </section>
 
           <section id="live-view" class="live-view" aria-labelledby="live-title">

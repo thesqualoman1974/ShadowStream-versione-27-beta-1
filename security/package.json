@@ -1,0 +1,21 @@
+{
+  "name": "security",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "bot:start": "node sentinel-core/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "discord.js": "^14.28.1",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "node-machine-id": "^1.1.12",
+    "ws": "^8.22.1"
+  }
+}

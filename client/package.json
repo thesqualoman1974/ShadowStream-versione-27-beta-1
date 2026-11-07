@@ -1,0 +1,82 @@
+{
+  "name": "sentinel-core-desktop",
+  "version": "27.0.0-beta.1",
+  "private": true,
+  "description": "Sentinel Core desktop security application",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "wscript.exe start-hidden.vbs",
+    "dev:console": "node dev.js",
+    "build:win": "electron-builder --win nsis --x64",
+    "publish:win": "electron-builder --win nsis --x64 --publish always"
+  },
+  "build": {
+    "appId": "it.shadowstream.sentinelcore",
+    "productName": "Sentinel Core",
+    "asar": true,
+    "generateUpdatesFilesForAllChannels": true,
+    "files": [
+      "main.js",
+      "index.html",
+      "discord-notifier.js",
+      "update-errors.js",
+      "staff-authorization.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../assets",
+        "to": "assets",
+        "filter": [
+          "logo.png",
+          "icon.ico"
+        ]
+      },
+      {
+        "from": "../security",
+        "to": "security",
+        "filter": [
+          "index.js",
+          "config.js",
+          "server.js",
+          "background-daemon.js",
+          "services/**/*"
+        ]
+      },
+      {
+        "from": "../security/node_modules",
+        "to": "security/node_modules"
+      }
+    ],
+    "directories": {
+      "output": "../sentinel-core-release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "../assets/icon.ico",
+      "artifactName": "Sentinel-Core-Setup.exe",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "thesqualoman1974",
+        "repo": "Sentinel_core",
+        "releaseType": "prerelease"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  }
+}

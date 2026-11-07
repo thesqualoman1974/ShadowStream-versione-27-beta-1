@@ -21,6 +21,7 @@ const { RtmpRelay } = require('./streaming/rtmp-relay');
 const { createDestinationStore } = require('./streaming/destination-store');
 const { authorizeYoutube } = require('./streaming/youtube-oauth');
 const { getYoutubeStreamIngest, listYoutubeStreams } = require('./streaming/youtube-api');
+const { createSecurityMonitor } = require('./security-monitor');
 
 for (const output of [process.stdout, process.stderr]) {
   output.on('error', (error) => {
@@ -39,6 +40,7 @@ const BACKEND_EXE = path.join(BACKEND_DIR, 'ShadowStream.exe');
 const CLIPS_PATH = path.join('D:\\', 'ShadowStream', 'Clips');
 
 let mainWindow = null;
+let securityMonitor = null;
 let backend = null;
 let starting = false;
 let quitting = false;
@@ -1215,6 +1217,18 @@ ipcMain.handle('live:get-status', async (event) => {
     platforms: liveDestinations,
   };
 });
+ipcMain.handle('security:status:get', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta scansione non autorizzata.');
+  return securityMonitor?.getStatus() || { state: 'idle', checkedAt: null, suspicious: false };
+});
+ipcMain.handle('security:scan-now', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta scansione non autorizzata.');
+  return securityMonitor.scanNow();
+});
+ipcMain.handle('security:test-scan', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('Richiesta scansione non autorizzata.');
+  return securityMonitor.testScan();
+});
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:toggle-maximize', () => {
   if (mainWindow?.isMaximized()) mainWindow.unmaximize();
@@ -1411,6 +1425,11 @@ if (!gotTheLock) {
       );
     });
     createWindow();
+    securityMonitor = createSecurityMonitor({
+      onLog: (text) => log('system', text),
+      onStatus: (status) => send('security:status', status),
+    });
+    securityMonitor.start();
     if (app.isPackaged) {
       setTimeout(() => checkForUpdates(), 3000);
     }
@@ -1426,6 +1445,7 @@ if (!gotTheLock) {
 
   app.on('before-quit', (event) => {
     quitting = true;
+    securityMonitor?.stop();
     if ((!backend || backend.exitCode !== null) && !obsEngine?.running
       && !obsEngine?.connecting && !streamRelay && !streamStartPromise) return;
 

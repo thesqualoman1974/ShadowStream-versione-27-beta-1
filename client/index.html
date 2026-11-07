@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel Core - Security &amp; Integrity Suite</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #0b1018;
+            color: #e8eef5;
+            font-synthesis: none;
+            text-rendering: optimizeLegibility;
+            --surface: #121b26;
+            --surface-raised: #172330;
+            --border: #263545;
+            --muted: #91a1b2;
+            --accent: #00e7c2;
+            --danger: #ff6268;
+            --warning: #ffb84d;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            min-width: 760px;
+            min-height: 100vh;
+            margin: 0;
+            background:
+                radial-gradient(ellipse at 12% -15%, rgba(0, 231, 194, .10), transparent 38%),
+                #0b1018;
+        }
+
+        button, input, textarea { font: inherit; }
+
+        .app-shell { width: min(1120px, calc(100% - 48px)); margin: 0 auto; padding: 22px 0 28px; }
+
+        .app-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            min-height: 104px;
+            padding: 0 4px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand-logo { display: block; width: 250px; height: auto; }
+        .header-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; }
+        .header-subtitle { margin: 0; color: var(--muted); font-size: 13px; letter-spacing: .02em; }
+        .update-controls { display: flex; align-items: center; gap: 8px; }
+        .version-badge {
+            border: 1px solid rgba(0, 231, 194, .28);
+            border-radius: 999px;
+            padding: 6px 9px;
+            background: rgba(0, 231, 194, .08);
+            color: var(--accent);
+            font-size: 11px;
+            font-weight: 800;
+        }
+        .update-status { max-width: 320px; margin: 0; color: var(--muted); font-size: 10px; text-align: right; }
+
+        .connection-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 7px 11px;
+            background: rgba(18, 27, 38, .85);
+            color: #c9d5e0;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .07em;
+            text-transform: uppercase;
+        }
+
+        .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px rgba(0, 231, 194, .55); }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr);
+            gap: 18px;
+            padding-top: 20px;
+        }
+
+        .main-column, .side-column { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+
+        .panel {
+            min-width: 0;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 22px;
+            background: linear-gradient(155deg, rgba(23, 35, 48, .98), rgba(16, 24, 34, .98));
+            box-shadow: 0 14px 36px rgba(0, 0, 0, .18);
+        }
+
+        .panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+        .eyebrow { margin: 0 0 7px; color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+        h1, h2, h3, p { margin-top: 0; }
+        h1 { margin-bottom: 8px; font-size: 21px; letter-spacing: -.02em; }
+        h2 { margin-bottom: 5px; font-size: 16px; }
+        h3 { margin-bottom: 0; font-size: 14px; }
+        .panel-description { margin-bottom: 18px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+
+        .status-box {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin: 16px 0;
+            padding: 14px;
+            border: 1px solid rgba(0, 231, 194, .2);
+            border-left: 3px solid var(--accent);
+            border-radius: 9px;
+            background: rgba(5, 12, 19, .45);
+        }
+
+        .status-icon {
+            display: grid;
+            flex: 0 0 28px;
+            width: 28px;
+            height: 28px;
+            place-items: center;
+            border-radius: 8px;
+            background: rgba(0, 231, 194, .11);
+            color: var(--accent);
+            font-weight: 800;
+        }
+
+        .status-copy { min-width: 0; }
+        .status-title { margin: 1px 0 4px; color: var(--accent); font-size: 12px; font-weight: 800; }
+        .status-detail { margin: 0; color: #c3ced8; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+
+        .primary-button, .secondary-button, .danger-button, .quiet-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 38px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            padding: 9px 14px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 750;
+            transition: background .16s ease, border-color .16s ease, transform .16s ease;
+        }
+
+        button:hover:not(:disabled) { transform: translateY(-1px); }
+        button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        button:disabled { cursor: wait; opacity: .65; }
+        .primary-button { background: var(--accent); color: #04120f; }
+        .primary-button:hover:not(:disabled) { background: #31f3d4; }
+        .danger-button { background: #d9434e; color: #fff; }
+        .danger-button:hover:not(:disabled) { background: #ed5560; }
+        .secondary-button { background: #e9a43c; color: #171007; }
+        .secondary-button:hover:not(:disabled) { background: #ffba52; }
+        .quiet-button { min-height: 32px; border-color: var(--border); background: #172330; color: #d5e0e9; padding: 7px 10px; }
+        .quiet-button:hover:not(:disabled) { border-color: #456078; background: #1d2d3d; }
+
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .field { min-width: 0; }
+        .field-wide { grid-column: 1 / -1; }
+        .field label { display: block; margin-bottom: 6px; color: #bdc9d4; font-size: 11px; font-weight: 700; }
+        .field input, .field textarea {
+            display: block;
+            width: 100%;
+            min-height: 38px;
+            border: 1px solid #2a3a4b;
+            border-radius: 7px;
+            padding: 9px 10px;
+            background: #0c131c;
+            color: #edf3f8;
+            font-size: 12px;
+        }
+        .field textarea { min-height: 66px; resize: vertical; line-height: 1.45; }
+        .field input::placeholder, .field textarea::placeholder { color: #6f8091; }
+        .field-note { margin: 6px 0 0; color: #74879a; font-size: 10px; line-height: 1.45; }
+        .staff-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
+        .credential-row { margin-top: 12px; }
+        .credential-help { margin: 7px 0 0; color: #7f91a3; font-size: 10px; line-height: 1.5; }
+
+        .log-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+        .log-count { color: var(--muted); font-size: 10px; }
+        .log-entries {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 360px;
+            min-height: 150px;
+            overflow-y: auto;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+        .log-entry {
+            border: 1px solid rgba(38, 53, 69, .8);
+            border-radius: 8px;
+            padding: 10px;
+            background: rgba(8, 14, 21, .5);
+            color: #c2ced9;
+            font: 10px/1.55 Consolas, "Courier New", monospace;
+            overflow-wrap: anywhere;
+        }
+        .log-empty { display: grid; min-height: 140px; place-items: center; color: #718295; text-align: center; font-size: 12px; }
+        .active-bans-list { max-height: 280px; min-height: 80px; margin-top: 12px; }
+        .active-ban-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            border: 1px solid rgba(38, 53, 69, .8);
+            border-radius: 8px;
+            padding: 10px;
+            background: rgba(8, 14, 21, .5);
+        }
+        .active-ban-identity { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+        .active-ban-identity strong { color: #e2ebf2; font-size: 11px; overflow-wrap: anywhere; }
+        .active-ban-identity code { color: var(--accent); font-size: 10px; overflow-wrap: anywhere; }
+        .active-ban-identity span { color: var(--muted); font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+        .notice-panel { border-color: rgba(255, 184, 77, .25); background: rgba(52, 39, 20, .28); }
+        .notice-panel .eyebrow { color: var(--warning); }
+        .notice-panel p { margin: 8px 0 0; color: #c6b99f; font-size: 11px; line-height: 1.6; }
+        .app-footer { padding-top: 16px; color: #627386; font-size: 10px; text-align: center; }
+        .update-dialog {
+            width: min(440px, calc(100% - 32px));
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 22px;
+            background: var(--surface-raised);
+            color: #e8eef5;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, .55);
+        }
+        .update-dialog::backdrop { background: rgba(0, 0, 0, .68); }
+        .update-dialog h2 { margin-bottom: 10px; }
+        .update-dialog p { margin-bottom: 20px; color: #c3ced8; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+        .update-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+        @media (max-width: 900px) {
+            .app-shell { width: min(680px, calc(100% - 32px)); padding-top: 14px; }
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .log-entries { max-height: 230px; }
+        }
+
+        @media (max-width: 600px) {
+            body { min-width: 360px; }
+            .app-shell { width: calc(100% - 24px); }
+            .app-header { align-items: flex-start; flex-direction: column; gap: 10px; }
+            .brand-logo { width: 205px; }
+            .header-meta { align-items: flex-start; }
+            .panel { padding: 16px; }
+            .form-grid { grid-template-columns: 1fr; }
+            .field-wide { grid-column: auto; }
+            .staff-actions > button { flex: 1 1 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <header class="app-header">
+            <img class="brand-logo" src="../assets/logo.png" alt="Sentinel Core">
+            <div class="header-meta">
+                <p class="header-subtitle">Security &amp; Integrity Suite</p>
+                <div class="update-controls">
+                    <span class="version-badge" id="versionBadge">27 beta 1</span>
+                    <button class="quiet-button" id="checkUpdatesBtn" type="button">Controlla aggiornamenti</button>
+                </div>
+                <p class="update-status" id="updateStatus" role="status" aria-live="polite">Aggiornamenti automatici attivi.</p>
+                <span class="connection-badge"><span class="connection-dot"></span> Backend locale</span>
+            </div>
+        </header>
+
+        <main class="dashboard-grid">
+            <div class="main-column">
+                <section class="panel" aria-labelledby="daemonHeading">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">Protezione in background</p>
+                            <h1 id="daemonHeading">Scanner Sentinel</h1>
+                        </div>
+                    </div>
+                    <p class="panel-description">La scansione della cartella FiveM e la verifica delle regole Firewall vengono eseguite automaticamente dal servizio in background.</p>
+                    <div class="status-box" id="statusText" role="status" aria-live="polite">
+                        <span class="status-icon" id="statusIcon">…</span>
+                        <div class="status-copy">
+                            <p class="status-title" id="statusTitle">Connessione al servizio</p>
+                            <p class="status-detail" id="statusDetail">Lettura dello stato dello scanner in background...</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel" aria-labelledby="staffHeading">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">Controllo accessi</p>
+                            <h2 id="staffHeading">Gestione ban staff</h2>
+                        </div>
+                    </div>
+                    <p class="panel-description">Registra il nome Steam insieme a Hex e IP per ritrovare rapidamente il blocco da rimuovere.</p>
+
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="steamName">Nome Steam registrato</label>
+                            <input type="text" id="steamName" maxlength="64" placeholder="Nome visualizzato in Steam" autocomplete="off">
+                        </div>
+                        <div class="field">
+                            <label for="targetHex">Steam Hex</label>
+                            <input type="text" id="targetHex" placeholder="steam:11000010a123456" autocomplete="off">
+                        </div>
+                        <div class="field field-wide">
+                            <label for="targetIp">IP da isolare</label>
+                            <input type="text" id="targetIp" value="45.138.203.69" placeholder="Es. 203.0.113.10" autocomplete="off">
+                        </div>
+                        <div class="field field-wide">
+                            <label for="banReason">Motivazione <span class="field-note">(facoltativa, massimo 200 caratteri)</span></label>
+                            <textarea id="banReason" maxlength="200" placeholder="Aggiungi una nota per il registro staff"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="staff-actions">
+                        <button class="danger-button" id="banBtn" onclick="executeBan()">Applica ban</button>
+                        <button class="quiet-button" id="loadBansBtn" onclick="loadActiveBans()">Aggiorna ban attivi</button>
+                        <button class="secondary-button" id="unbanBtn" onclick="executeUnban()">Rimuovi ban selezionato</button>
+                    </div>
+                </section>
+            </div>
+
+            <aside class="side-column">
+                <section class="panel" aria-labelledby="activeBansHeading">
+                    <div class="log-toolbar">
+                        <div>
+                            <p class="eyebrow">Ricerca staff</p>
+                            <h2 id="activeBansHeading">Ban attivi</h2>
+                        </div>
+                        <span class="log-count" id="activeBanCount">Caricamento...</span>
+                    </div>
+                    <div class="field">
+                        <label for="banSearch">Cerca per nome Steam o Steam Hex</label>
+                        <input type="search" id="banSearch" placeholder="Digita nome o identificativo" autocomplete="off">
+                    </div>
+                    <p class="credential-help">L’autorizzazione staff è gestita localmente dall’app. Seleziona un ban per compilare il modulo di sblocco.</p>
+                    <ul class="log-entries active-bans-list" id="activeBansList" aria-live="polite">
+                        <li class="log-empty">Caricamento dei ban attivi...</li>
+                    </ul>
+                </section>
+
+                <section class="panel" aria-labelledby="logsHeading">
+                    <div class="log-toolbar">
+                        <div>
+                            <p class="eyebrow">Attività</p>
+                            <h2 id="logsHeading">Registro eventi</h2>
+                        </div>
+                        <button class="quiet-button" id="refreshLogsBtn" onclick="refreshLogs()">Aggiorna</button>
+                    </div>
+                    <p class="panel-description">Eventi recenti di scansione, blocco e revisione staff.</p>
+                    <p class="log-count" id="logCount">Caricamento...</p>
+                    <ul class="log-entries" id="logEntries" aria-live="polite">
+                        <li class="log-empty">Caricamento del registro...</li>
+                    </ul>
+                </section>
+
+                <section class="panel notice-panel">
+                    <p class="eyebrow">Ambito del blocco</p>
+                    <h3>Firewall locale</h3>
+                    <p>Il ban blocca l’IP inserito solo sul PC che esegue Sentinel Core. Non crea un ban sull’account nel server FiveM: per quello serve un’integrazione con le risorse o le API amministrative del server.</p>
+                </section>
+            </aside>
+        </main>
+
+        <footer class="app-footer">Sentinel Core · Security &amp; Integrity Suite</footer>
+    </div>
+
+    <dialog class="update-dialog" id="updateDialog" aria-labelledby="updateDialogTitle">
+        <h2 id="updateDialogTitle">Aggiornamenti Sentinel Core</h2>
+        <p id="updateDialogMessage" role="status" aria-live="polite">Controllo aggiornamenti in corso...</p>
+        <div class="update-dialog-actions">
+            <button class="quiet-button" id="closeUpdateDialog" type="button">Chiudi</button>
+            <button class="primary-button" id="updateDialogAction" type="button" hidden>Riprova</button>
+        </div>
+    </dialog>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        let daemonStatusCheckRunning = false;
+        let activeBans = [];
+        let currentUpdateState = { state: 'idle' };
+        let updateDialogDismissed = false;
+
+        function formatVersion(version) {
+            const beta = /^(\d+)\.\d+\.\d+-beta\.(\d+)$/.exec(version || '');
+            return beta ? `${beta[1]} beta ${beta[2]}` : version || 'Versione sconosciuta';
+        }
+
+        function renderUpdateStatus(status) {
+            currentUpdateState = status;
+            const button = document.getElementById('checkUpdatesBtn');
+            const message = document.getElementById('updateStatus');
+            const updateDialog = document.getElementById('updateDialog');
+            const dialogMessage = document.getElementById('updateDialogMessage');
+            const dialogAction = document.getElementById('updateDialogAction');
+            if (status.currentVersion) {
+                document.getElementById('versionBadge').textContent = formatVersion(status.currentVersion);
+            }
+
+            const states = {
+                idle: ['Aggiornamenti automatici attivi.', 'Controlla aggiornamenti', false],
+                checking: ['Controllo aggiornamenti in corso...', 'Controllo in corso...', true],
+                'up-to-date': [`Sentinel Core ${formatVersion(status.currentVersion)} è aggiornato.`, 'Controlla di nuovo', false],
+                available: [`Versione ${formatVersion(status.version)} trovata. Download automatico in corso...`, 'Download in corso...', true],
+                downloading: [`Download aggiornamento: ${status.percent || 0}%`, 'Download in corso...', true],
+                downloaded: [`Versione ${formatVersion(status.version)} pronta per l’installazione.`, 'Installa e riavvia', false],
+                installing: ['Installazione aggiornamento in corso...', 'Installazione...', true],
+                unsupported: ['Gli aggiornamenti automatici sono disponibili nella versione installata.', 'Solo versione installata', true],
+                error: [`Controllo aggiornamenti non riuscito: ${status.message || 'errore sconosciuto'}`, 'Riprova', false]
+            };
+            const [text, label, disabled] = states[status.state] || states.idle;
+            message.textContent = text;
+            button.textContent = label;
+            button.disabled = disabled;
+            dialogMessage.textContent = text;
+            dialogAction.hidden = !['up-to-date', 'downloaded', 'error'].includes(status.state);
+            dialogAction.textContent = status.state === 'downloaded' ? 'Installa e riavvia' : 'Riprova';
+            dialogAction.disabled = false;
+            if (!updateDialogDismissed && !['idle', 'unsupported'].includes(status.state)
+                && !updateDialog.open) {
+                updateDialog.showModal();
+            }
+        }
+
+        async function runUpdateAction() {
+            try {
+                if (currentUpdateState.state === 'downloaded') {
+                    await ipcRenderer.invoke('updates:install');
+                } else {
+                    await ipcRenderer.invoke('updates:check');
+                }
+            } catch (error) {
+                renderUpdateStatus({
+                    ...currentUpdateState,
+                    state: 'error',
+                    message: 'Impossibile completare il controllo aggiornamenti. Riprova.'
+                });
+            }
+        }
+
+        function setStatus(kind, title, detail) {
+            const colors = {
+                success: '#00e7c2',
+                warning: '#ffb84d',
+                error: '#ff6268',
+                working: '#78aefc'
+            };
+            const color = colors[kind] || colors.working;
+            const statusBox = document.getElementById('statusText');
+            statusBox.style.borderColor = `${color}55`;
+            statusBox.style.borderLeftColor = color;
+            document.getElementById('statusIcon').style.color = color;
+            document.getElementById('statusIcon').style.background = `${color}1c`;
+            document.getElementById('statusIcon').textContent = kind === 'success' ? '✓' : kind === 'error' ? '!' : '…';
+            document.getElementById('statusTitle').style.color = color;
+            document.getElementById('statusTitle').textContent = title;
+            document.getElementById('statusDetail').textContent = detail;
+        }
+
+        function setActionButtonsBusy(busy) {
+            for (const id of ['banBtn', 'unbanBtn', 'loadBansBtn']) {
+                document.getElementById(id).disabled = busy;
+            }
+        }
+
+        async function refreshDaemonStatus() {
+            if (daemonStatusCheckRunning) return;
+            daemonStatusCheckRunning = true;
+            try {
+                const result = await ipcRenderer.invoke('get-security-status');
+                if (result.success && result.daemon?.running) {
+                    if (result.daemon.scanning) {
+                        setStatus('working', 'Controllo automatico in corso', 'Verifica della cartella FiveM e delle regole Firewall.');
+                    } else if (result.daemon.lastError) {
+                        setStatus('warning', 'Controllo da verificare', result.daemon.lastError);
+                    } else if (result.daemon.lastRunAt) {
+                        const lastRun = new Date(result.daemon.lastRunAt).toLocaleString('it-IT');
+                        setStatus('success', 'Servizio attivo', `Ultimo controllo automatico: ${lastRun}.`);
+                    } else {
+                        setStatus('working', 'Servizio attivo', 'La prima scansione automatica è in corso.');
+                    }
+                } else {
+                    setStatus('warning', 'Stato non verificabile', result.error || 'Il servizio di scansione non risulta attivo.');
+                }
+            } catch (error) {
+                setStatus('warning', 'Backend non raggiungibile', 'Verifica che il servizio locale sia in esecuzione.');
+            } finally {
+                daemonStatusCheckRunning = false;
+            }
+        }
+
+        async function executeBan() {
+            const steamName = document.getElementById('steamName').value.trim();
+            const steamHex = document.getElementById('targetHex').value.trim();
+            const serverIp = document.getElementById('targetIp').value.trim();
+            const reason = document.getElementById('banReason').value.trim();
+            if (!steamName || !steamHex || !serverIp) {
+                setStatus('warning', 'Dati incompleti', 'Inserisci nome Steam, Steam Hex e IP.');
+                return;
+            }
+
+            setActionButtonsBusy(true);
+            setStatus('working', 'Richiesta di blocco', `Verifica autorizzazione per ${steamName} (${steamHex})...`);
+            try {
+                const result = await ipcRenderer.invoke('run-ban', { steamName, steamHex, serverIp, reason });
+                if (result.success && result.banned) {
+                    const notification = result.discordNotification;
+                    setStatus(
+                        notification?.success ? 'success' : 'warning',
+                        notification?.success ? 'Blocco locale attivo' : 'Blocco attivo; Discord non notificato',
+                        notification?.success
+                            ? `Regola Firewall locale applicata a ${serverIp} per ${steamName}. Notifiche inviate in ban-unban e resoconto-player.`
+                            : `Il blocco locale è attivo, ma la notifica Discord non è riuscita: ${notification?.error || 'esito non disponibile.'}`
+                    );
+                    await loadActiveBans();
+                } else {
+                    setStatus('error', 'Blocco non applicato', result.error || 'Richiesta rifiutata. Riavvia Sentinel Core come amministratore.');
+                }
+            } catch (error) {
+                setStatus('error', 'Richiesta non riuscita', 'Impossibile contattare il servizio di sicurezza locale.');
+            } finally {
+                setActionButtonsBusy(false);
+                await refreshLogs();
+            }
+        }
+
+        async function executeUnban() {
+            const steamHex = document.getElementById('targetHex').value.trim();
+            if (!steamHex) {
+                setStatus('warning', 'Dati incompleti', 'Inserisci lo Steam Hex.');
+                return;
+            }
+
+            setActionButtonsBusy(true);
+            const steamName = document.getElementById('steamName').value.trim();
+            setStatus('working', 'Richiesta di sblocco', `Verifica autorizzazione per ${steamName || steamHex}...`);
+            try {
+                const serverIp = document.getElementById('targetIp').value.trim();
+                const reason = document.getElementById('banReason').value.trim();
+                const result = await ipcRenderer.invoke('run-unban', { steamHex, steamName, serverIp, reason });
+                if (result.success) {
+                    const notification = result.discordNotification;
+                    setStatus(
+                        notification?.success ? 'success' : 'warning',
+                        notification?.success ? 'Sblocco completato' : 'Sblocco completato; Discord non notificato',
+                        notification?.success
+                            ? `${result.message} Notifiche inviate in ban-unban e resoconto-player.`
+                            : `${result.message} Notifica Discord non riuscita: ${notification?.error || 'esito non disponibile.'}`
+                    );
+                    await loadActiveBans();
+                } else {
+                    setStatus('error', 'Sblocco non riuscito', result.error || 'Richiesta rifiutata. Verifica i dati e i privilegi Firewall.');
+                }
+            } catch (error) {
+                setStatus('error', 'Richiesta non riuscita', 'Impossibile contattare il servizio di sicurezza locale.');
+            } finally {
+                setActionButtonsBusy(false);
+                await refreshLogs();
+            }
+        }
+
+        function renderActiveBans() {
+            const list = document.getElementById('activeBansList');
+            const query = document.getElementById('banSearch').value.trim().toLocaleLowerCase();
+            const filtered = activeBans.filter(ban =>
+                `${ban.steamName} ${ban.steamHex} ${ban.serverIp}`.toLocaleLowerCase().includes(query)
+            );
+            list.replaceChildren();
+
+            if (filtered.length === 0) {
+                const item = document.createElement('li');
+                item.className = 'log-empty';
+                item.textContent = activeBans.length ? 'Nessun risultato per questa ricerca.' : 'Nessun ban attivo caricato.';
+                list.append(item);
+                return;
+            }
+
+            for (const ban of filtered) {
+                const item = document.createElement('li');
+                item.className = 'active-ban-card';
+                const identity = document.createElement('div');
+                identity.className = 'active-ban-identity';
+                const name = document.createElement('strong');
+                name.textContent = ban.steamName || 'Nome non registrato';
+                const hex = document.createElement('code');
+                hex.textContent = ban.steamHex;
+                const details = document.createElement('span');
+                details.textContent = `${ban.serverIp} · ${ban.reason || 'Nessuna motivazione'}`;
+                identity.append(name, hex, details);
+
+                const select = document.createElement('button');
+                select.type = 'button';
+                select.className = 'quiet-button';
+                select.textContent = 'Seleziona';
+                select.addEventListener('click', () => {
+                    document.getElementById('steamName').value = ban.steamName || '';
+                    document.getElementById('targetHex').value = ban.steamHex;
+                    document.getElementById('targetIp').value = ban.serverIp;
+                    document.getElementById('banReason').value = ban.reason || '';
+                    document.getElementById('targetHex').focus();
+                });
+                item.append(identity, select);
+                list.append(item);
+            }
+        }
+
+        async function loadActiveBans() {
+            const button = document.getElementById('loadBansBtn');
+            button.disabled = true;
+            document.getElementById('activeBanCount').textContent = 'Ricerca...';
+            try {
+                const result = await ipcRenderer.invoke('get-active-bans');
+                if (!result.success) {
+                    activeBans = [];
+                    document.getElementById('activeBanCount').textContent = 'Non disponibile';
+                    setStatus('error', 'Ricerca non riuscita', result.error || 'Impossibile caricare i ban attivi.');
+                } else {
+                    activeBans = Array.isArray(result.entries) ? result.entries : [];
+                    document.getElementById('activeBanCount').textContent = `${activeBans.length} attivi`;
+                }
+                renderActiveBans();
+            } catch (error) {
+                document.getElementById('activeBanCount').textContent = 'Backend non raggiungibile';
+                setStatus('error', 'Ricerca non riuscita', 'Impossibile caricare i ban attivi.');
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function refreshLogs() {
+            const logEntries = document.getElementById('logEntries');
+            const logCount = document.getElementById('logCount');
+            const refreshButton = document.getElementById('refreshLogsBtn');
+            refreshButton.disabled = true;
+            try {
+                const result = await ipcRenderer.invoke('get-security-logs');
+                if (!result.success) {
+                    logCount.textContent = 'Registro non disponibile';
+                    logEntries.replaceChildren();
+                    const item = document.createElement('li');
+                    item.className = 'log-empty';
+                    item.textContent = result.error || 'Impossibile caricare il registro.';
+                    logEntries.append(item);
+                    return;
+                }
+
+                const entries = Array.isArray(result.entries) ? result.entries : [];
+                logCount.textContent = `${entries.length} ${entries.length === 1 ? 'evento' : 'eventi'} recenti`;
+                logEntries.replaceChildren();
+                if (entries.length === 0) {
+                    const item = document.createElement('li');
+                    item.className = 'log-empty';
+                    item.textContent = 'Nessun evento registrato.';
+                    logEntries.append(item);
+                } else {
+                    for (const entry of [...entries].reverse()) {
+                        const item = document.createElement('li');
+                        item.className = 'log-entry';
+                        item.textContent = entry;
+                        logEntries.append(item);
+                    }
+                }
+            } catch (error) {
+                logCount.textContent = 'Registro non disponibile';
+                logEntries.textContent = 'Impossibile contattare il backend locale.';
+            } finally {
+                refreshButton.disabled = false;
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const updateButton = document.getElementById('checkUpdatesBtn');
+            const updateDialog = document.getElementById('updateDialog');
+            updateButton.addEventListener('click', async () => {
+                updateDialogDismissed = false;
+                if (!updateDialog.open) updateDialog.showModal();
+                updateButton.disabled = true;
+                await runUpdateAction();
+            });
+            document.getElementById('closeUpdateDialog').addEventListener('click', () => updateDialog.close());
+            updateDialog.addEventListener('close', () => {
+                updateDialogDismissed = true;
+            });
+            document.getElementById('updateDialogAction').addEventListener('click', () => {
+                void runUpdateAction();
+            });
+            ipcRenderer.on('updates:status', (_event, status) => renderUpdateStatus(status));
+            ipcRenderer.invoke('updates:get-status')
+                .then(renderUpdateStatus)
+                .catch(error => renderUpdateStatus({ state: 'error', message: error.message }));
+            document.getElementById('banSearch').addEventListener('input', renderActiveBans);
+            loadActiveBans();
+            refreshLogs();
+            refreshDaemonStatus();
+            window.setInterval(refreshDaemonStatus, 10000);
+            window.setInterval(refreshLogs, 15000);
+        });
+    </script>
+</body>
+</html>

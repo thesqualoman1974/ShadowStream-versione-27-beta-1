@@ -1,11 +1,12 @@
 {
   "name": "shadowstream",
-  "version": "27.0.0-beta.2.4",
+  "version": "27.0.0-beta.1",
   "private": true,
   "description": "ShadowStream - replay buffer e multi-streaming (Electron + OBS Studio + .NET 8)",
   "main": "electron/main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "wscript.exe start-hidden.vbs",
+    "start:console": "electron .",
     "start:debug": "electron . --devtools",
     "test": "node --test",
     "backend:build": "dotnet build",
@@ -19,6 +20,7 @@
     "asar": true,
     "files": [
       "electron/**/*",
+      "security/services/scanner.js",
       "package.json"
     ],
     "extraResources": [
@@ -52,7 +54,7 @@
     ]
   },
   "devDependencies": {
-    "electron": "^45.2.1",
+    "electron": "^45.2.3",
     "electron-builder": "^26.18.0"
   },
   "dependencies": {
