@@ -1,4 +1,4 @@
-# Sentinel Core 27 beta 1
+# Sentinel Core 27 beta 2
 
 Avvia la dashboard con backend locale senza lasciare aperta la console di Node:
 
