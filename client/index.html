@@ -515,7 +515,7 @@
                         notification?.success ? 'success' : 'warning',
                         notification?.success ? 'Blocco locale attivo' : 'Blocco attivo; Discord non notificato',
                         notification?.success
-                            ? `Regola Firewall locale applicata a ${serverIp} per ${steamName}. Notifiche inviate in ban-unban e resoconto-player.`
+                            ? `Regola Firewall locale applicata a ${serverIp} per ${steamName}. Notifica inviata in ban-unban.`
                             : `Il blocco locale è attivo, ma la notifica Discord non è riuscita: ${notification?.error || 'esito non disponibile.'}`
                     );
                     await loadActiveBans();
@@ -550,7 +550,7 @@
                         notification?.success ? 'success' : 'warning',
                         notification?.success ? 'Sblocco completato' : 'Sblocco completato; Discord non notificato',
                         notification?.success
-                            ? `${result.message} Notifiche inviate in ban-unban e resoconto-player.`
+                            ? `${result.message} Notifica inviata in ban-unban.`
                             : `${result.message} Notifica Discord non riuscita: ${notification?.error || 'esito non disponibile.'}`
                     );
                     await loadActiveBans();

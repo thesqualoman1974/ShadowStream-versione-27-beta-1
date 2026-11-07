@@ -28,7 +28,7 @@ test('sends authenticated moderation events to the local bot', async () => {
             requestOptions = { url, options };
             return {
                 ok: true,
-                json: async () => ({ success: true, sent: ['ban-unban', 'resoconto-player'] })
+                json: async () => ({ success: true, sent: ['ban-unban'] })
             };
         }
     });
@@ -48,7 +48,7 @@ test('reports bot errors and partial channel delivery', async () => {
                 success: false,
                 error: 'Notifica parziale.',
                 sent: ['ban-unban'],
-                failed: ['resoconto-player']
+                failed: ['ban-unban']
             })
         })
     });
@@ -57,7 +57,7 @@ test('reports bot errors and partial channel delivery', async () => {
         success: false,
         error: 'Notifica parziale.',
         sent: ['ban-unban'],
-        failed: ['resoconto-player']
+        failed: ['ban-unban']
     });
 });
 

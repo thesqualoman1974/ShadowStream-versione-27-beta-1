@@ -60,7 +60,7 @@ async function notifyDiscordEvent(event, {
         if (!response.ok || result?.success !== true) {
             return {
                 success: false,
-                error: result?.error || 'Il bot Discord non ha confermato entrambe le notifiche.',
+                error: result?.error || 'Il bot Discord non ha confermato la notifica nel canale ban-unban.',
                 sent: Array.isArray(result?.sent) ? result.sent : [],
                 failed: Array.isArray(result?.failed) ? result.failed : []
             };

@@ -15,8 +15,9 @@ Il comando avvia backend e finestra Electron insieme, senza packaging. Usa la ca
 Per registrare in Discord i ban/sban manuali, avvia prima il bot locale con
 `npm --prefix security install` e `npm --prefix security run bot:start` dalla
 root. Bot e Sentinel Core devono essere eseguiti con lo stesso account Windows.
-Il bot invia l'azione a `ban-unban` e il riepilogo a `resoconto-player`; se il
-bot o un canale non è raggiungibile, Sentinel Core segnala che l'operazione
+Il bot invia le azioni manuali di Sentinel Core solo a `ban-unban`.
+`resoconto-player` resta riservato ai report di ShadowStream. Se il bot o il
+canale operativo non è raggiungibile, Sentinel Core segnala che l'operazione
 locale è riuscita ma la notifica è fallita.
 
 ## Creare l'app Windows separata
